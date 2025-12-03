@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Personnel Planning Calendar</title>
+  <link rel="stylesheet" href="styles.css">
+  
+  <!-- FullCalendar CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.css" rel="stylesheet">
+  
+  <!-- Google API Client Library -->
+  <script src="https://apis.google.com/js/api.js"></script>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Personnel Planning Calendar</h1>
+      
+      <div id="status" class="status" style="display: none;"></div>
+      
+      <div class="controls">
+        <div class="control-group">
+          <button id="signInBtn" class="btn btn-primary" style="display: none;">Sign in with Google</button>
+          <button id="signOutBtn" class="btn btn-secondary" style="display: none;">Sign out</button>
+        </div>
+        
+        <div class="control-group">
+          <label for="personFilter">Filter by Person</label>
+          <select id="personFilter">
+            <option value="">All People</option>
+          </select>
+        </div>
+        
+        <div class="control-group">
+          <label for="projectFilter">Filter by Project</label>
+          <select id="projectFilter">
+            <option value="">All Projects</option>
+          </select>
+        </div>
+        
+        <div class="control-group">
+          <label for="viewType">View</label>
+          <select id="viewType">
+            <option value="dayGridMonth">Month</option>
+            <option value="timeGridWeek">Week</option>
+            <option value="listYear">Year</option>
+          </select>
+        </div>
+        
+        <div class="control-group">
+          <button id="refreshBtn" class="btn">Refresh</button>
+        </div>
+      </div>
+    </div>
+    
+    <div id="calendar"></div>
+  </div>
+  
+  <!-- Configuration -->
+  <script src="config.js"></script>
+  
+  <!-- FullCalendar JS -->
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+  
+  <!-- Main application -->
+  <script src="app.js"></script>
+</body>
+</html>
+
