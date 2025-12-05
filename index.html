@@ -4,7 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Personnel Planning Calendar</title>
-  <base href="/WORK_PERSONELL_CALENDAR/">
+  <script>
+    // Set base href only for GitHub Pages deployment (not localhost)
+    // Must use document.write to execute before stylesheet links
+    if (window.location.hostname !== 'localhost' && 
+        window.location.hostname !== '127.0.0.1' && 
+        window.location.hostname !== '') {
+      document.write('<base href="/WORK_PERSONELL_CALENDAR/">');
+    }
+  </script>
   <link rel="stylesheet" href="styles.css">
   
   <!-- FullCalendar CSS -->
@@ -89,6 +97,12 @@
           <label for="eventProject">Project:</label>
           <select id="eventProject" class="form-control">
             <option value="">Select a project...</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="eventRole">Role:</label>
+          <select id="eventRole" class="form-control">
+            <option value="">Select a role...</option>
           </select>
         </div>
         <div class="form-actions">

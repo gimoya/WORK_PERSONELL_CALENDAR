@@ -10,6 +10,12 @@ let currentSelectInfo = null; // Store selected date range for event creation
 
 // Load config from localStorage or use default
 function loadConfig() {
+  // Store default roles before any modifications
+  // If CONFIG.roles is not defined yet, use defaults
+  const defaultRoles = (CONFIG.roles && CONFIG.roles.length > 0) 
+    ? [...CONFIG.roles] 
+    : ['Project-Manager', 'Foreman', 'Shaper', 'Operator-Shaper'];
+  
   const savedConfig = localStorage.getItem('personnelCalendarConfig');
   if (savedConfig) {
     const parsed = JSON.parse(savedConfig);
@@ -61,6 +67,14 @@ function loadConfig() {
         color: defaultColors[index % defaultColors.length]
       }));
     }
+  }
+  
+  // Always preserve roles from default CONFIG (roles are system configuration, not user data)
+  CONFIG.roles = defaultRoles;
+  
+  // Final fallback: ensure roles are always set
+  if (!CONFIG.roles || CONFIG.roles.length === 0) {
+    CONFIG.roles = ['Project-Manager', 'Foreman', 'Shaper', 'Operator-Shaper'];
   }
 }
 
@@ -129,7 +143,7 @@ async function init() {
         return;
       } catch (error) {
         // Token invalid or expired, clear it
-        console.log('Stored token invalid, clearing...');
+        // Token invalid or expired, clear it
         localStorage.removeItem('google_access_token');
         gapi.client.setToken(null);
       }
@@ -234,7 +248,7 @@ function handleSignOut() {
   if (accessToken) {
     // Revoke the token
     google.accounts.oauth2.revoke(accessToken, () => {
-      console.log('Token revoked');
+      // Token revoked
     });
   }
   
@@ -296,7 +310,6 @@ async function loadEvents() {
     // Update calendar display
     updateCalendar();
     
-    console.log(`Loaded ${allEvents.length} events`);
   } catch (error) {
     console.error('Error loading events:', error);
     // Check if token expired
@@ -311,19 +324,31 @@ async function loadEvents() {
   }
 }
 
-// Parse event to extract person and project
+// Parse event to extract person, project, and role
 function parseEvent(event) {
   const summary = event.summary || '';
-  const match = summary.match(/^(.+?)\s*-\s*(.+)$/);
+  // Try to match "Person - Project - Role" format
+  const matchWithRole = summary.match(/^(.+?)\s*-\s*(.+?)\s*-\s*(.+)$/);
   
-  if (match) {
+  if (matchWithRole) {
     return {
-      person: match[1].trim(),
-      project: match[2].trim()
+      person: matchWithRole[1].trim(),
+      project: matchWithRole[2].trim(),
+      role: matchWithRole[3].trim()
     };
   }
   
-  return { person: '', project: summary };
+  // Fallback to old format "Person - Project" (backward compatibility)
+  const match = summary.match(/^(.+?)\s*-\s*(.+)$/);
+  if (match) {
+    return {
+      person: match[1].trim(),
+      project: match[2].trim(),
+      role: '' // No role in old format
+    };
+  }
+  
+  return { person: '', project: summary, role: '' };
 }
 
 // Get person color
@@ -334,15 +359,17 @@ function getPersonColor(personName) {
 
 // Convert Google Calendar event to FullCalendar event
 function toFullCalendarEvent(gcalEvent) {
-  const { person, project } = parseEvent(gcalEvent);
+  const { person, project, role } = parseEvent(gcalEvent);
   const color = getPersonColor(person);
   
   const start = gcalEvent.start.dateTime || gcalEvent.start.date;
   const end = gcalEvent.end.dateTime || gcalEvent.end.date;
   
+  const title = role ? `${person} - ${project} - ${role}` : `${person} - ${project}`;
+  
   return {
     id: gcalEvent.id,
-    title: `${person} - ${project}`,
+    title: title,
     start: start,
     end: end,
     backgroundColor: color,
@@ -350,6 +377,7 @@ function toFullCalendarEvent(gcalEvent) {
     extendedProps: {
       person: person,
       project: project,
+      role: role,
       gcalEvent: gcalEvent
     }
   };
@@ -514,30 +542,88 @@ function handleDateSelect(selectInfo) {
   // Populate dropdowns
   const personSelect = document.getElementById('eventPerson');
   const projectSelect = document.getElementById('eventProject');
+  const roleSelect = document.getElementById('eventRole');
+  
+  if (!personSelect || !projectSelect || !roleSelect) {
+    console.error('Modal dropdown elements not found');
+    return;
+  }
   
   // Clear existing options (except first)
   personSelect.innerHTML = '<option value="">Select a person...</option>';
   projectSelect.innerHTML = '<option value="">Select a project...</option>';
+  roleSelect.innerHTML = '<option value="">Select a role...</option>';
   
   // Populate person dropdown
-  CONFIG.people.forEach(person => {
-    const option = document.createElement('option');
-    option.value = person.name || person;
-    option.textContent = person.name || person;
-    personSelect.appendChild(option);
-  });
+  if (CONFIG.people && CONFIG.people.length > 0) {
+    CONFIG.people.forEach(person => {
+      const option = document.createElement('option');
+      option.value = person.name || person;
+      option.textContent = person.name || person;
+      personSelect.appendChild(option);
+    });
+  }
   
   // Populate project dropdown
-  CONFIG.projects.forEach(project => {
-    const option = document.createElement('option');
-    const projectName = project.name || project;
-    option.value = projectName;
-    option.textContent = projectName;
-    projectSelect.appendChild(option);
-  });
+  if (CONFIG.projects && CONFIG.projects.length > 0) {
+    CONFIG.projects.forEach(project => {
+      const option = document.createElement('option');
+      const projectName = project.name || project;
+      option.value = projectName;
+      option.textContent = projectName;
+      projectSelect.appendChild(option);
+    });
+  }
+  
+  // Populate role dropdown
+  // Always use hardcoded roles to ensure they're available
+  const rolesToAdd = ['Project-Manager', 'Foreman', 'Shaper', 'Operator-Shaper'];
+  
+  // Also check CONFIG.roles if available
+  if (CONFIG.roles && CONFIG.roles.length > 0) {
+    rolesToAdd.length = 0; // Clear array
+    CONFIG.roles.forEach(r => rolesToAdd.push(r));
+  }
+  
+  if (roleSelect) {
+    // Clear existing options first (keep the first "Select..." option)
+    roleSelect.innerHTML = '<option value="">Select a role...</option>';
+    
+    rolesToAdd.forEach(role => {
+      if (role && role.trim()) { // Only add non-empty roles
+        const option = document.createElement('option');
+        option.value = role;
+        option.textContent = role;
+        roleSelect.appendChild(option);
+      }
+    });
+  }
   
   // Show modal
-  document.getElementById('eventModal').style.display = 'block';
+  const eventModal = document.getElementById('eventModal');
+  if (eventModal) {
+    eventModal.style.display = 'block';
+    
+    // Double-check role dropdown after modal is shown
+    setTimeout(() => {
+      const roleSelectCheck = document.getElementById('eventRole');
+      if (roleSelectCheck && roleSelectCheck.options.length <= 1) {
+        // Repopulate if still empty
+        roleSelectCheck.innerHTML = '<option value="">Select a role...</option>';
+        const rolesToAdd = CONFIG.roles && CONFIG.roles.length > 0 
+          ? CONFIG.roles 
+          : ['Project-Manager', 'Foreman', 'Shaper', 'Operator-Shaper'];
+        rolesToAdd.forEach(role => {
+          if (role && role.trim()) {
+            const option = document.createElement('option');
+            option.value = role;
+            option.textContent = role;
+            roleSelectCheck.appendChild(option);
+          }
+        });
+      }
+    }, 100);
+  }
 }
 
 // Close event modal
@@ -553,9 +639,10 @@ function closeEventModal() {
 async function handleEventCreate() {
   const person = document.getElementById('eventPerson').value;
   const project = document.getElementById('eventProject').value;
+  const role = document.getElementById('eventRole').value;
   
-  if (!person || !project) {
-    showStatus('Please select both person and project', 'error');
+  if (!person || !project || !role) {
+    showStatus('Please select person, project, and role', 'error');
     return;
   }
   
@@ -565,7 +652,7 @@ async function handleEventCreate() {
   }
   
   try {
-    await createEvent(person, project, currentSelectInfo.start, currentSelectInfo.end);
+    await createEvent(person, project, role, currentSelectInfo.start, currentSelectInfo.end);
     closeEventModal();
   } catch (error) {
     console.error('Error creating event:', error);
@@ -582,7 +669,7 @@ function formatLocalDate(date) {
 }
 
 // Create new event
-async function createEvent(person, project, start, end) {
+async function createEvent(person, project, role, start, end) {
   showStatus('Creating event...', 'loading');
   
   // Use local date formatting to avoid timezone issues
@@ -595,7 +682,7 @@ async function createEvent(person, project, start, end) {
   const endDate = formatLocalDate(endDateObj);
   
   const event = {
-    summary: `${person} - ${project}`,
+    summary: `${person} - ${project} - ${role}`,
     start: {
       date: startDate
     },
@@ -1067,261 +1154,343 @@ function renderCompactYearView() {
     filteredEvents = filteredEvents.filter(e => e.extendedProps.project === projectFilter);
   }
   
-  // Create events map by date
-  const eventsByDate = {};
+  // Group events by project, then by person+role combination
+  // Only include events with valid person, project, and role
+  const eventsByProjectPersonRole = {};
   filteredEvents.forEach(event => {
-    const start = new Date(event.start);
-    const end = new Date(event.end);
-    const current = new Date(start);
+    const project = event.extendedProps.project || '';
+    const person = event.extendedProps.person || '';
+    const role = event.extendedProps.role || '';
     
-    while (current <= end) {
-      const dateKey = current.toISOString().split('T')[0];
-      if (!eventsByDate[dateKey]) {
-        eventsByDate[dateKey] = [];
-      }
-      eventsByDate[dateKey].push(event);
-      current.setDate(current.getDate() + 1);
+    // Skip events without valid person, project, or role
+    if (!project || !person || !role || project.trim() === '' || person.trim() === '' || role.trim() === '' || project === 'Unassigned') {
+      return;
     }
+    
+    const personRoleKey = `${person}|||${role}`;
+    
+    if (!eventsByProjectPersonRole[project]) {
+      eventsByProjectPersonRole[project] = {};
+    }
+    if (!eventsByProjectPersonRole[project][personRoleKey]) {
+      eventsByProjectPersonRole[project][personRoleKey] = {
+        person: person,
+        role: role,
+        events: []
+      };
+    }
+    eventsByProjectPersonRole[project][personRoleKey].events.push(event);
   });
   
-  // Create person assignments map by date for bar rendering
-  const personAssignmentsByDate = {};
-  filteredEvents.forEach(event => {
-    const start = new Date(event.start);
-    const end = new Date(event.end);
-    const current = new Date(start);
-    const person = event.extendedProps.person;
-    
-    while (current <= end) {
-      const dateKey = current.toISOString().split('T')[0];
-      if (!personAssignmentsByDate[dateKey]) {
-        personAssignmentsByDate[dateKey] = new Set();
-      }
-      personAssignmentsByDate[dateKey].add(person);
-      current.setDate(current.getDate() + 1);
-    }
-  });
-  
-  // Determine slot assignment based on chronological first appearance
-  // Scan all dates chronologically, assign slots 0, 1, 2... as persons first appear
-  const personSlotMap = new Map(); // Maps person name to their slot index (0 = bottom)
-  const personFirstAppearance = new Map(); // Maps person name to their first date
-  let nextSlotIndex = 0;
-  
-  // Get all dates in chronological order
-  const allDateKeys = Object.keys(personAssignmentsByDate).sort();
-  
-  // First pass: determine first appearance and assign slots
-  allDateKeys.forEach(dateKey => {
-    const personsOnDate = Array.from(personAssignmentsByDate[dateKey] || []);
-    // Sort persons by CONFIG.people order for consistent ordering when multiple appear on same date
-    const sortedPersons = personsOnDate.sort((a, b) => {
-      const indexA = CONFIG.people.findIndex(p => (p.name || p) === a);
-      const indexB = CONFIG.people.findIndex(p => (p.name || p) === b);
-      return indexA - indexB;
-    });
-    
-    sortedPersons.forEach(personName => {
-      if (!personSlotMap.has(personName)) {
-        // First appearance: assign next available slot (from bottom up)
-        personSlotMap.set(personName, nextSlotIndex);
-        personFirstAppearance.set(personName, dateKey);
-        nextSlotIndex++;
-      }
+  // Create a map of all dates for each person+role in each project
+  const personRoleDatesByProject = {};
+  Object.keys(eventsByProjectPersonRole).forEach(project => {
+    personRoleDatesByProject[project] = {};
+    Object.keys(eventsByProjectPersonRole[project]).forEach(personRoleKey => {
+      const { person, role, events } = eventsByProjectPersonRole[project][personRoleKey];
+      const dateSet = new Set();
+      
+      events.forEach(event => {
+        const start = new Date(event.start);
+        const end = new Date(event.end);
+        const current = new Date(start);
+        
+        while (current <= end) {
+          const dateKey = current.toISOString().split('T')[0];
+          dateSet.add(dateKey);
+          current.setDate(current.getDate() + 1);
+        }
+      });
+      
+      personRoleDatesByProject[project][personRoleKey] = {
+        person,
+        role,
+        dates: Array.from(dateSet).sort()
+      };
     });
   });
   
-  // Helper function to check if a date is part of a consecutive range for a person
-  function getPersonBarInfo(dateKey, personName) {
-    if (!personAssignmentsByDate[dateKey] || !personAssignmentsByDate[dateKey].has(personName)) {
-      return null;
+  // Get projects that have valid person+role assignments
+  const projectsWithAssignments = new Set();
+  Object.keys(personRoleDatesByProject).forEach(project => {
+    const combos = personRoleDatesByProject[project] || {};
+    const validKeys = Object.keys(combos).filter(key => {
+      const combo = combos[key];
+      return combo && combo.person && combo.role && combo.dates && combo.dates.length > 0;
+    });
+    if (validKeys.length > 0) {
+      projectsWithAssignments.add(project);
     }
-    
-    const date = new Date(dateKey);
-    const prevDate = new Date(date);
-    prevDate.setDate(prevDate.getDate() - 1);
-    const nextDate = new Date(date);
-    nextDate.setDate(nextDate.getDate() + 1);
-    
-    const prevKey = prevDate.toISOString().split('T')[0];
-    const nextKey = nextDate.toISOString().split('T')[0];
-    
-    const hasPrev = personAssignmentsByDate[prevKey] && personAssignmentsByDate[prevKey].has(personName);
-    const hasNext = personAssignmentsByDate[nextKey] && personAssignmentsByDate[nextKey].has(personName);
-    
-    let position = 'single';
-    if (hasPrev && hasNext) {
-      position = 'middle';
-    } else if (hasPrev) {
-      position = 'end';
-    } else if (hasNext) {
-      position = 'start';
-    }
-    
-    const slotIndex = personSlotMap.get(personName) ?? 999; // Use slot index based on first appearance
-    
-    return { position, color: getPersonColor(personName), slotIndex, personName };
-  }
+  });
+  
+  // Get projects to show: ONLY show projects with valid assignments (no empty rows from CONFIG)
+  let projectsToShow = projectFilter 
+    ? [projectFilter]
+    : Array.from(projectsWithAssignments).sort();
+  
+  // Remove duplicates and filter invalid
+  projectsToShow = [...new Set(projectsToShow)].filter(p => p && p.trim() !== '' && p !== '...');
+  
   
   // Generate HTML
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   
-  let html = `<div class="compact-year-container">
-    <div class="compact-year-header">
-      <h2>${currentYear} - ${nextYear}</h2>
-    </div>
-    <div class="compact-year-grid">`;
-  
-  // Render both years (24 months total)
+  // Generate all days for current year and next year
+  const allDays = [];
   const years = [currentYear, nextYear];
   years.forEach(year => {
-    // Create each month as a column
     for (let month = 0; month < 12; month++) {
-      const firstDay = new Date(year, month, 1);
       const lastDay = new Date(year, month + 1, 0);
       const daysInMonth = lastDay.getDate();
-      const firstDayOfWeek = firstDay.getDay(); // 0 = Sunday, 1 = Monday, etc.
-      
-      // Convert Sunday (0) to 7 for easier calculation
-      const startOffset = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1;
-      
-      // Always use 6 weeks for proper alignment
-      const weeksInMonth = 6;
-      
-      html += `<div class="compact-month-column">
-        <div class="compact-month-header">${monthNames[month]} ${year}</div>
-        <div class="compact-month-days-header">
-          <div class="compact-week-number-header">KW</div>
-          ${dayNames.map((day, idx) => {
-            const isWeekend = idx >= 5; // Sat (5) and Sun (6)
-            return `<div class="compact-day-name ${isWeekend ? 'weekend' : ''}">${day}</div>`;
-          }).join('')}
-        </div>`;
-      
-      // Create week rows (always 6 weeks for alignment)
-      for (let week = 0; week < weeksInMonth; week++) {
-        // Calculate week number for the first day of this week
-        const weekStartDate = new Date(year, month, week * 7 - startOffset + 1);
-        const weekNumber = getISOWeekNumber(weekStartDate);
+      for (let day = 1; day <= daysInMonth; day++) {
+        const date = new Date(year, month, day);
+        const dateKey = date.toISOString().split('T')[0];
+        const dayOfWeek = date.getDay();
+        const dayName = dayNames[dayOfWeek === 0 ? 6 : dayOfWeek - 1];
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+        const weekNumber = getISOWeekNumber(date);
         
-        html += `<div class="compact-week-row">`;
-        html += `<div class="compact-week-number">${weekNumber}</div>`;
-        
-        // Create 7 day cells for this week
-        for (let dayOfWeek = 0; dayOfWeek < 7; dayOfWeek++) {
-          const cellIndex = week * 7 + dayOfWeek;
-          const dayNumber = cellIndex - startOffset + 1;
-          const isWeekend = dayOfWeek >= 5; // Sat (5) and Sun (6)
-          
-          if (dayNumber > 0 && dayNumber <= daysInMonth) {
-            // Valid day in this month
-            const date = new Date(year, month, dayNumber);
-            const dateKey = date.toISOString().split('T')[0];
-            const dayEvents = eventsByDate[dateKey] || [];
-            const isToday = dateKey === new Date().toISOString().split('T')[0];
-            const hasPersonnel = dayEvents.length > 0;
-            
-            // Get unique personnel with their colors
-            const personnelList = dayEvents.map(e => e.extendedProps.person).filter(p => p);
-            const uniquePersonnel = [...new Set(personnelList)];
-            
-            // Get bar info for each person and sort by slot index (based on first appearance)
-            const personBars = uniquePersonnel
-              .map(personName => getPersonBarInfo(dateKey, personName))
-              .filter(b => b)
-              .sort((a, b) => a.slotIndex - b.slotIndex); // Sort by slot index (chronological first appearance)
-            
-            // Calculate available space for bars
-            // Cell is 80px high, with 2px padding top/bottom = 4px total padding
-            // Reserve ~20px at top for day number to prevent overlap
-            // Bars are absolutely positioned from bottom: 0
-            const cellHeight = 80;
-            const cellPaddingBottom = 2; // Bottom padding
-            const reservedTopSpace = 20; // Space to keep clear for day number
-            const availableHeight = cellHeight - cellPaddingBottom - reservedTopSpace; // 80 - 2 - 20 = 58px
-            
-            // Calculate bar dimensions: 1px margin/gap around each bar, make bars thicker
-            const barMargin = 1; // 1px margin/gap
-            const maxSlots = 15; // Maximum slots available
-            const minBarHeight = 4; // Minimum bar height for visibility
-            
-            // Calculate how many slots we can actually fit with minimum bar height
-            // Formula: availableHeight = (numSlots * barHeight) + (numSlots * gap)
-            // Rearranged: numSlots = availableHeight / (barHeight + gap)
-            const effectiveSlots = Math.min(maxSlots, Math.floor(availableHeight / (minBarHeight + barMargin)));
-            
-            // Calculate bar height based on effective slots
-            const totalGapSpace = effectiveSlots * barMargin; // 1px gap for each slot
-            let barHeight = Math.floor((availableHeight - totalGapSpace) / effectiveSlots); // Height per bar
-            barHeight = Math.max(barHeight, minBarHeight); // Ensure minimum thickness
-            
-            // Use effective slots for positioning
-            const slotsToUse = effectiveSlots;
-            
-            // Create tooltip content with person names and colors
-            const personNamesHtml = personBars.map(barInfo => {
-              return `<span class="compact-hover-name" style="color: ${barInfo.color}; font-weight: 600;">${barInfo.personName}</span>`;
-            }).join('');
-            
-            html += `<div class="compact-day-cell ${isToday ? 'today' : ''} ${hasPersonnel ? 'has-personnel' : ''}" 
-              data-date="${dateKey}"
-              data-personnel="${personBars.map(b => b.personName).join(',')}"
-              title="${date.toLocaleDateString()}">
-              <div class="compact-day-number">${dayNumber}</div>
-              <div class="compact-personnel-hover-tooltip">${personNamesHtml}</div>
-              <div class="compact-personnel-bars">`;
-            
-            // Create slot array and place bars in their assigned slots based on first appearance
-            // Slot 0 = first person to appear (chronologically) = bottom
-            // Additional persons stack above in order of first appearance
-            // Exception: If only one person on this date, always place at bottom slot (0)
-            const barSlots = new Array(slotsToUse).fill(null);
-            
-            if (personBars.length === 1) {
-              // Single person: always place at bottom slot (0) regardless of chronological slot index
-              barSlots[0] = personBars[0];
-            } else {
-              // Multiple people: use their chronological first appearance slots
-              personBars.forEach(barInfo => {
-                if (barInfo.slotIndex < slotsToUse) {
-                  barSlots[barInfo.slotIndex] = barInfo;
-                }
-              });
-            }
-            
-            // Render bars from bottom up, ordered by slot index (chronological first appearance)
-            // Each bar: bottom position = slotIdx * (barHeight + 1px gap) + 1px bottom margin
-            barSlots.forEach((barInfo, slotIdx) => {
-              if (barInfo) {
-                const barClass = `compact-personnel-bar compact-bar-${barInfo.position}`;
-                // Calculate bottom position: slot 0 at bottom with 1px margin, each slot above with bar height + 1px gap
-                const bottomPosition = slotIdx * (barHeight + barMargin) + barMargin;
-                html += `<div class="${barClass}" style="background-color: ${barInfo.color}; bottom: ${bottomPosition}px; height: ${barHeight}px;" data-slot="${slotIdx}"></div>`;
-              }
-            });
-            
-            html += `</div></div>`;
-          } else {
-            // Empty cell (before or after month)
-            html += `<div class="compact-day-cell empty"></div>`;
-          }
-        }
-        
-        html += `</div>`;
+        allDays.push({
+          date,
+          dateKey,
+          day,
+          month,
+          year,
+          dayName,
+          isWeekend,
+          weekNumber,
+          monthName: monthNames[month]
+        });
       }
-      
-      html += `</div>`;
     }
   });
   
-  html += `</div></div>`;
+  // Build proper table structure like CSV
+  let html = `<div class="project-overview-container">
+    <div class="project-overview-header">
+      <h2>${currentYear} - ${nextYear}</h2>
+      <button id="scrollToTodayBtn" class="btn btn-secondary" style="margin-left: 10px;">Today</button>
+    </div>
+    <div class="overview-table-wrapper">
+      <table class="overview-table">
+      <thead>
+        <!-- Row 1: Month headers -->
+        <tr class="header-row-month">
+          <th class="project-col-header" rowspan="3">Project</th>
+          <th class="role-col-header" rowspan="3">Role</th>
+          <th class="person-col-header" rowspan="3">Person</th>`;
+  
+  // Month header row - group days by month
+  let currentMonth = null;
+  let monthStartIndex = 0;
+  allDays.forEach((dayInfo, index) => {
+    const monthKey = `${dayInfo.year}-${dayInfo.month}`;
+    if (currentMonth !== monthKey) {
+      if (currentMonth !== null) {
+        // Close previous month header
+        const monthSpan = index - monthStartIndex;
+        html += `<th class="month-header" colspan="${monthSpan}">${allDays[monthStartIndex].monthName} ${allDays[monthStartIndex].year}</th>`;
+      }
+      // Start new month header
+      monthStartIndex = index;
+      currentMonth = monthKey;
+    }
+  });
+  // Close last month header
+  if (currentMonth !== null) {
+    const monthSpan = allDays.length - monthStartIndex;
+    html += `<th class="month-header" colspan="${monthSpan}">${allDays[monthStartIndex].monthName} ${allDays[monthStartIndex].year}</th>`;
+  }
+  html += `</tr>`;
+  
+  // Row 2: Week number headers
+  html += `<tr class="header-row-week">`;
+  let currentWeek = null;
+  let weekStartIndex = 0;
+  allDays.forEach((dayInfo, index) => {
+    const weekKey = `${dayInfo.year}-W${dayInfo.weekNumber}`;
+    if (currentWeek !== weekKey) {
+      if (currentWeek !== null) {
+        // Close previous week header
+        const weekSpan = index - weekStartIndex;
+        html += `<th class="week-header" colspan="${weekSpan}">KW${allDays[weekStartIndex].weekNumber}</th>`;
+      }
+      weekStartIndex = index;
+      currentWeek = weekKey;
+    }
+  });
+  // Close last week header
+  if (currentWeek !== null) {
+    const weekSpan = allDays.length - weekStartIndex;
+    html += `<th class="week-header" colspan="${weekSpan}">KW${allDays[weekStartIndex].weekNumber}</th>`;
+  }
+  html += `</tr>`;
+  
+  // Row 3: Day name headers (weekday only)
+  html += `<tr class="header-row-day">`;
+  allDays.forEach(dayInfo => {
+    html += `<th class="day-header ${dayInfo.isWeekend ? 'weekend' : ''}" title="${dayInfo.dateKey}">
+      ${dayInfo.dayName}
+    </th>`;
+  });
+  html += `</tr>
+      </thead>
+      <tbody>`;
+  
+  // Group data rows by project (one card per project)
+  projectsToShow.forEach(project => {
+    const projectName = typeof project === 'string' ? project : project.name;
+    
+    // Skip if project name is invalid
+    if (!projectName || projectName.trim() === '' || projectName === '...') {
+      return;
+    }
+    
+    // Get all person+role combinations for this project
+    const personRoleCombos = personRoleDatesByProject[project] || {};
+    const personRoleKeys = Object.keys(personRoleCombos).filter(key => {
+      const combo = personRoleCombos[key];
+      return combo && combo.person && combo.role && combo.dates && combo.dates.length > 0;
+    });
+    
+    // Sort by CONFIG.roles order first, then by CONFIG.people order
+    const rolesOrder = CONFIG.roles || ['Project-Manager', 'Foreman', 'Shaper', 'Operator-Shaper'];
+    const peopleOrder = CONFIG.people.map(p => typeof p === 'string' ? p : p.name);
+    
+    personRoleKeys.sort((a, b) => {
+      const comboA = personRoleCombos[a];
+      const comboB = personRoleCombos[b];
+      
+      // First sort by role order
+      const roleIndexA = rolesOrder.indexOf(comboA.role);
+      const roleIndexB = rolesOrder.indexOf(comboB.role);
+      if (roleIndexA !== roleIndexB) {
+        // If role not found in config, put it at the end
+        if (roleIndexA === -1) return 1;
+        if (roleIndexB === -1) return -1;
+        return roleIndexA - roleIndexB;
+      }
+      
+      // Then sort by person order
+      const personIndexA = peopleOrder.indexOf(comboA.person);
+      const personIndexB = peopleOrder.indexOf(comboB.person);
+      if (personIndexA !== personIndexB) {
+        // If person not found in config, put it at the end
+        if (personIndexA === -1) return 1;
+        if (personIndexB === -1) return -1;
+        return personIndexA - personIndexB;
+      }
+      
+      return 0;
+    });
+    
+    // Skip projects with no valid assignments
+    if (personRoleKeys.length === 0) {
+      return;
+    }
+    
+    // For each person+role combination, create a row
+    personRoleKeys.forEach((personRoleKey, index) => {
+      const { person, role, dates } = personRoleCombos[personRoleKey];
+      
+      if (!person || !role || !dates || dates.length === 0) {
+        return;
+      }
+      
+      const personColor = getPersonColor(person);
+      const dateSet = new Set(dates);
+      const isFirstRow = index === 0;
+      const rowSpan = personRoleKeys.length;
+      
+      html += `<tr class="data-row">`;
+      
+      // Project column (only in first row, spans all rows for this project, rotated 90°)
+      if (isFirstRow) {
+        html += `<td class="project-col" rowspan="${rowSpan}">
+          <div class="project-name-rotated">${projectName}</div>
+        </td>`;
+      }
+      
+      // Role column
+      html += `<td class="role-col">${role}</td>`;
+      
+      // Person column
+      html += `<td class="person-col" style="color: ${personColor};">${person}</td>`;
+      
+      // Day cells
+      allDays.forEach((dayInfo, dayIndex) => {
+        const hasPerson = dateSet.has(dayInfo.dateKey);
+        const isToday = dayInfo.dateKey === new Date().toISOString().split('T')[0];
+        
+        // Check if this is start, middle, or end of a bar span
+        const prevDay = dayIndex > 0 ? allDays[dayIndex - 1] : null;
+        const nextDay = dayIndex < allDays.length - 1 ? allDays[dayIndex + 1] : null;
+        const hasPrev = prevDay && dateSet.has(prevDay.dateKey);
+        const hasNext = nextDay && dateSet.has(nextDay.dateKey);
+        
+        let barClass = '';
+        if (hasPerson) {
+          if (hasPrev && hasNext) {
+            barClass = 'bar-middle';
+          } else if (hasPrev) {
+            barClass = 'bar-end';
+          } else if (hasNext) {
+            barClass = 'bar-start';
+          } else {
+            barClass = 'bar-single';
+          }
+        }
+        
+        html += `<td class="day-cell ${isToday ? 'today' : ''} ${hasPerson ? 'has-personnel' : ''} ${dayInfo.isWeekend ? 'weekend' : ''} ${barClass}" 
+          data-date="${dayInfo.dateKey}"
+          data-person="${person}"
+          title="${dayInfo.date.toLocaleDateString()} - ${projectName} - ${person} (${role})">`;
+        
+        html += `<div class="day-number-in-cell">${dayInfo.day}</div>`;
+        
+        if (hasPerson) {
+          html += `<div class="person-role-bar" style="background-color: ${personColor};"></div>`;
+        }
+        
+        html += `</td>`;
+      });
+      
+      html += `</tr>`;
+    });
+    
+    // End project card group - add separator row
+    html += `<tr class="project-group-end">
+      <td class="project-separator-left" colspan="3"></td>`;
+    
+    allDays.forEach(() => {
+      html += `<td class="project-separator-cell"></td>`;
+    });
+    
+    html += `</tr>`;
+  });
+  
+  html += `</tbody>
+      </table>
+    </div>
+  </div>`;
   
   container.innerHTML = html;
   
-  // Scroll to today
+  // Add scroll to today button handler
+  const scrollToTodayBtn = container.querySelector('#scrollToTodayBtn');
+  if (scrollToTodayBtn) {
+    scrollToTodayBtn.addEventListener('click', () => {
+      const todayCell = container.querySelector('.day-cell.today');
+      if (todayCell) {
+        todayCell.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      }
+    });
+  }
+  
+  // Auto-scroll to today on initial load
   setTimeout(() => {
-    const todayCell = container.querySelector('.compact-day-cell.today');
+    const todayCell = container.querySelector('.day-cell.today');
     if (todayCell) {
       todayCell.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
     }

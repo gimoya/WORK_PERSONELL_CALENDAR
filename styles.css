@@ -439,6 +439,324 @@ body {
   box-sizing: border-box;
 }
 
+/* Project Overview Styles */
+
+/* New table-based overview structure */
+.overview-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: none;
+  background-color: #ffffff;
+  font-size: 11px;
+  margin: 0;
+}
+
+.overview-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background-color: #ffffff;
+}
+
+.overview-table th {
+  border: 1px solid #e0e0e0;
+  padding: 4px 2px;
+  text-align: center;
+  font-weight: 600;
+  background-color: #f8f9fa;
+}
+
+.overview-table thead tr:first-child th:first-child {
+  border-top-left-radius: 3px;
+}
+
+.overview-table thead tr:first-child th:last-child {
+  border-top-right-radius: 3px;
+}
+
+.overview-table .project-col-header,
+.overview-table .role-col-header,
+.overview-table .person-col-header {
+  background-color: #f0f0f0;
+  position: sticky;
+  z-index: 21;
+  font-weight: 600;
+  font-size: 11px;
+  padding: 4px 8px;
+  border: 1px solid #d0d0d0;
+  border-right: 2px solid #d0d0d0;
+}
+
+.overview-table .project-col-header {
+  left: 0;
+  min-width: 150px;
+  width: 150px;
+  border-left: 2px solid #d0d0d0;
+}
+
+.overview-table .role-col-header {
+  left: 150px;
+  min-width: 120px;
+  width: 120px;
+}
+
+.overview-table .person-col-header {
+  left: 270px;
+  min-width: 120px;
+  width: 120px;
+  border-right: 2px solid #d0d0d0;
+}
+
+.overview-table .header-row-month th.month-header {
+  background-color: #e8eaed;
+  font-size: 12px;
+  padding: 6px 2px;
+}
+
+.overview-table .header-row-week th.week-header {
+  background-color: #f0f0f0;
+  font-size: 10px;
+  padding: 4px 2px;
+  color: #5f6368;
+}
+
+.overview-table .header-row-day th.day-header {
+  min-width: 30px;
+  width: 30px;
+  font-size: 9px;
+  padding: 4px 1px;
+  background-color: #f8f9fa;
+}
+
+.overview-table .header-row-day th.day-header.weekend {
+  color: #ea4335;
+}
+
+.overview-table tbody tr.data-row {
+  border-bottom: 1px solid #e0e0e0;
+  background-color: #ffffff;
+}
+
+.overview-table tbody tr.data-row:hover {
+  background-color: #f8f9fa;
+}
+
+.overview-table td {
+  border: 1px solid #e0e0e0;
+  padding: 1px;
+  text-align: center;
+  vertical-align: middle;
+  position: relative;
+  min-width: 30px;
+  width: 30px;
+  height: 28px;
+}
+
+.overview-table td.project-col {
+  min-width: 150px;
+  width: 150px;
+  text-align: left;
+  vertical-align: middle;
+  padding: 3px 8px;
+  background-color: #e8eaed;
+  position: sticky;
+  left: 0;
+  z-index: 10;
+  border-right: 2px solid #d0d0d0;
+}
+
+.overview-table td.role-col {
+  min-width: 120px;
+  width: 120px;
+  text-align: left;
+  padding: 3px 8px;
+  background-color: #f8f9fa;
+  position: sticky;
+  left: 150px;
+  z-index: 10;
+  border-right: 1px solid #e0e0e0;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.overview-table td.person-col {
+  min-width: 120px;
+  width: 120px;
+  text-align: left;
+  padding: 3px 8px;
+  background-color: #f8f9fa;
+  position: sticky;
+  left: 270px;
+  z-index: 10;
+  border-right: 2px solid #d0d0d0;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.project-name-rotated {
+  font-weight: 700;
+  font-size: 13px;
+  color: #202124;
+  white-space: nowrap;
+}
+
+.overview-table td.label-cell .project-name-inline {
+  font-weight: 700;
+  font-size: 13px;
+  color: #202124;
+}
+
+.overview-table td.label-cell .role-name-inline {
+  font-weight: 700;
+  font-size: 13px;
+  color: #5f6368;
+  font-style: italic;
+}
+
+.overview-table td.label-cell .person-name-inline {
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.overview-table td.day-cell {
+  background-color: #ffffff;
+  position: relative;
+}
+
+.overview-table td.day-cell .day-number-in-cell {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  font-size: 9px;
+  color: #5f6368;
+  font-weight: 500;
+  z-index: 2;
+  background-color: rgba(255, 255, 255, 0.8);
+  padding: 1px 2px;
+  border-radius: 2px;
+}
+
+.overview-table td.day-cell.weekend {
+  background-color: #fffde7;
+}
+
+.overview-table td.day-cell.today {
+  background-color: #e6f4ea;
+  border: 2px solid #34a853;
+}
+
+.overview-table td.day-cell.has-personnel {
+  background-color: #fffde7;
+}
+
+.overview-table td.day-cell .person-role-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 8px;
+  z-index: 1;
+  margin: 0 1px;
+}
+
+.overview-table td.day-cell.bar-start .person-role-bar {
+  border-top-left-radius: 4px;
+  border-bottom-left-radius: 4px;
+}
+
+.overview-table td.day-cell.bar-end .person-role-bar {
+  border-top-right-radius: 4px;
+  border-bottom-right-radius: 4px;
+}
+
+.overview-table td.day-cell.bar-single .person-role-bar {
+  border-radius: 4px;
+}
+
+/* Project card grouping */
+.overview-table tr.project-header-row {
+  background-color: #e8eaed;
+  border-top: 2px solid #d0d0d0;
+  border-bottom: 1px solid #d0d0d0;
+}
+
+.overview-table tr.project-header-row td.project-header-cell {
+  padding: 6px 12px;
+  background-color: #e8eaed;
+  border: none;
+  text-align: left;
+}
+
+.overview-table .project-card-header {
+  font-size: 14px;
+  font-weight: 700;
+  color: #202124;
+  display: block;
+}
+
+.overview-table tr.project-group-end td.project-separator-left {
+  height: 8px;
+  background-color: #ffffff;
+  border: none;
+  border-bottom: 2px solid #d0d0d0;
+  padding: 0;
+}
+
+.overview-table tr.project-group-end td.project-separator-cell {
+  height: 8px;
+  background-color: #ffffff;
+  border: none;
+  border-bottom: 2px solid #d0d0d0;
+  padding: 0;
+}
+
+#compactYearView {
+  width: 100%;
+  box-sizing: border-box;
+  overflow: visible;
+}
+
+.project-overview-container {
+  margin-top: 10px;
+  width: 100%;
+  box-sizing: border-box;
+  position: relative;
+}
+
+.project-overview-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background-color: #ffffff;
+  padding: 8px 0;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid #e0e0e0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.overview-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: calc(100vh - 200px);
+  border: 2px solid #d0d0d0;
+  border-radius: 3px;
+}
+
+.project-overview-header h2 {
+  margin: 0;
+  color: #202124;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* Removed unused CSS from old flex-based layout - now using table structure */
+
 #compactYearView {
   display: none;
   width: 100%;

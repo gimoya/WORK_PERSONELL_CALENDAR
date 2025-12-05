@@ -28,6 +28,14 @@ const CONFIG = {
     // Add more projects as needed
   ],
   
+  // List of roles
+  roles: [
+    'Project-Manager',
+    'Foreman',
+    'Shaper',
+    'Operator-Shaper'
+  ],
+  
   // OAuth 2.0 Client ID from Google Cloud Console
   // Get this from: APIs & Services > Credentials > OAuth 2.0 Client IDs
   oauthClientId: '581029517390-ofv5l3p97p5ikikp59d99o10065gc7eb.apps.googleusercontent.com'
