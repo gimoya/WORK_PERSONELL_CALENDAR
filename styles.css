@@ -46,6 +46,26 @@ body {
   flex: 0 0 auto;
 }
 
+.info-link {
+  font-size: 20px;
+  text-decoration: none;
+  color: #5f6368;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 50%;
+  transition: background-color 0.2s, color 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+}
+
+.info-link:hover {
+  background-color: #f1f3f4;
+  color: #202124;
+}
+
 .logo-placeholder {
   display: flex;
   align-items: center;
@@ -323,6 +343,12 @@ body {
   width: 90%;
   max-width: 500px;
   position: relative;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-large {
+  max-width: 800px;
 }
 
 .modal-close {
@@ -1180,5 +1206,87 @@ body {
     max-width: 50px;
     width: 50px;
   }
+}
+
+/* Calendar Access Info Modal Styles */
+.instructions-container {
+  margin: 20px 0;
+}
+
+.instruction-step {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 25px;
+  align-items: flex-start;
+}
+
+.step-number {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  background-color: #4285f4;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.step-content {
+  flex: 1;
+}
+
+.step-content h3 {
+  margin: 0 0 8px 0;
+  color: #202124;
+  font-size: 16px;
+}
+
+.step-content p {
+  margin: 8px 0;
+  color: #5f6368;
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+.step-content a {
+  color: #4285f4;
+  text-decoration: none;
+}
+
+.step-content a:hover {
+  text-decoration: underline;
+}
+
+.calendar-id-info {
+  background-color: #f8f9fa;
+  padding: 10px;
+  border-radius: 4px;
+  margin: 10px 0;
+  border-left: 3px solid #4285f4;
+}
+
+.calendar-id-info code {
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  color: #202124;
+  word-break: break-all;
+  display: block;
+  margin-top: 5px;
+}
+
+.important-note {
+  background-color: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 4px;
+  padding: 10px;
+  margin: 10px 0;
+  color: #856404;
+}
+
+.important-note strong {
+  color: #856404;
 }
 

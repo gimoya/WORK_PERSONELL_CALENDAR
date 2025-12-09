@@ -173,6 +173,13 @@ async function saveConfigToCalendar() {
     });
   } catch (error) {
     console.error('Error saving config to calendar:', error);
+    if (error.status === 403) {
+      showStatus('Cannot save: You do not have write access to this calendar. Please ask the calendar owner to grant you "Make changes to events" permission.', 'error');
+      throw new Error('Write access denied');
+    } else if (error.status === 404) {
+      showStatus('Cannot save: Calendar not found or not shared with your account.', 'error');
+      throw new Error('Calendar not accessible');
+    }
     throw error;
   }
 }
@@ -308,6 +315,72 @@ function loadGAPI() {
   });
 }
 
+// Validate calendar access and write permissions
+async function validateCalendarAccess() {
+  try {
+    // First, check if we can access the calendar at all
+    const calendarResponse = await gapiClient.calendar.calendars.get({
+      calendarId: CONFIG.calendarId
+    });
+    
+    const calendar = calendarResponse.result;
+    
+    // Check if user has write access by attempting to list events
+    // If they can't even read, they definitely can't write
+    await gapiClient.calendar.events.list({
+      calendarId: CONFIG.calendarId,
+      maxResults: 1
+    });
+    
+    // Try to create a test event to verify write access
+    // We'll delete it immediately if successful
+    const testEvent = {
+      summary: '__WRITE_ACCESS_TEST__',
+      start: { date: '2000-01-01' },
+      end: { date: '2000-01-02' }
+    };
+    
+    try {
+      const createResponse = await gapiClient.calendar.events.insert({
+        calendarId: CONFIG.calendarId,
+        resource: testEvent
+      });
+      
+      // Delete the test event immediately
+      await gapiClient.calendar.events.delete({
+        calendarId: CONFIG.calendarId,
+        eventId: createResponse.result.id
+      });
+      
+      return { hasAccess: true, hasWriteAccess: true };
+    } catch (writeError) {
+      if (writeError.status === 403) {
+        return { 
+          hasAccess: true, 
+          hasWriteAccess: false,
+          error: 'You have read access but not write access. Please ask the calendar owner to grant you "Make changes to events" permission.'
+        };
+      }
+      throw writeError;
+    }
+  } catch (error) {
+    if (error.status === 404) {
+      return {
+        hasAccess: false,
+        hasWriteAccess: false,
+        error: 'Calendar not found or not shared with your account. Please ask the calendar owner to share the calendar with your email address.'
+      };
+    } else if (error.status === 403) {
+      return {
+        hasAccess: false,
+        hasWriteAccess: false,
+        error: 'You do not have access to this calendar. Please ask the calendar owner to share it with your email address and grant "Make changes to events" permission.'
+      };
+    }
+    throw error;
+  }
+}
+
 // Handle successful sign-in
 async function onSignInSuccess() {
   isSignedIn = true;
@@ -318,13 +391,42 @@ async function onSignInSuccess() {
     localStorage.setItem('google_access_token', accessToken);
   }
   
-  showStatus('Signed in successfully', 'success');
+  showStatus('Signed in successfully. Validating calendar access...', 'loading');
+  
+  // Validate calendar access and write permissions
+  try {
+    const accessCheck = await validateCalendarAccess();
+    
+    if (!accessCheck.hasAccess) {
+      showStatus(accessCheck.error, 'error');
+      // Still allow UI to initialize but disable write operations
+      initializeUI();
+      return;
+    }
+    
+    if (!accessCheck.hasWriteAccess) {
+      showStatus(accessCheck.error, 'error');
+      // Still allow UI to initialize but disable write operations
+      initializeUI();
+      return;
+    }
+    
+    showStatus('Calendar access validated', 'success');
+  } catch (error) {
+    console.error('Error validating calendar access:', error);
+    showStatus('Error validating calendar access: ' + error.message, 'error');
+    initializeUI();
+    return;
+  }
   
   // Load config from calendar (will override localStorage)
   try {
     await loadConfigFromCalendar();
   } catch (error) {
     console.error('Error loading config from calendar:', error);
+    if (error.status === 403 || error.status === 404) {
+      showStatus('Cannot load configuration: ' + (error.message || 'Access denied'), 'error');
+    }
   }
   
   // Initialize UI
@@ -441,6 +543,10 @@ async function loadEvents() {
       showStatus('Session expired. Please sign in again.', 'error');
       handleSignOut();
       showSignInButton();
+    } else if (error.status === 403) {
+      showStatus('Cannot load events: You do not have access to this calendar. Please ask the calendar owner to share it with your email address.', 'error');
+    } else if (error.status === 404) {
+      showStatus('Cannot load events: Calendar not found or not shared with your account.', 'error');
     } else {
       showStatus('Error loading events: ' + error.message, 'error');
     }
@@ -626,6 +732,58 @@ function initializeUI() {
   if (manageRolesBtn) {
     manageRolesBtn.addEventListener('click', () => {
       showRolesModal();
+    });
+  }
+  
+  // Calendar access info modal
+  const calendarAccessInfoLink = document.getElementById('calendarAccessInfoLink');
+  const calendarAccessInfoModal = document.getElementById('calendarAccessInfoModal');
+  const calendarAccessInfoCloseBtn = document.getElementById('calendarAccessInfoCloseBtn');
+  const displayCalendarId = document.getElementById('displayCalendarId');
+  const calendarShareLink = document.getElementById('calendarShareLink');
+  
+  if (calendarAccessInfoLink) {
+    calendarAccessInfoLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      
+      // Display calendar ID
+      if (displayCalendarId) {
+        displayCalendarId.textContent = CONFIG.calendarId;
+      }
+      
+      // Set calendar share link
+      if (calendarShareLink && CONFIG.shareLink) {
+        calendarShareLink.href = CONFIG.shareLink;
+      }
+      
+      // Show modal
+      if (calendarAccessInfoModal) {
+        calendarAccessInfoModal.style.display = 'block';
+      }
+    });
+  }
+  
+  if (calendarAccessInfoCloseBtn) {
+    calendarAccessInfoCloseBtn.addEventListener('click', () => {
+      if (calendarAccessInfoModal) {
+        calendarAccessInfoModal.style.display = 'none';
+      }
+    });
+  }
+  
+  if (calendarAccessInfoModal) {
+    const closeBtn = calendarAccessInfoModal.querySelector('.modal-close');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => {
+        calendarAccessInfoModal.style.display = 'none';
+      });
+    }
+    
+    // Close modal when clicking outside
+    window.addEventListener('click', (e) => {
+      if (e.target === calendarAccessInfoModal) {
+        calendarAccessInfoModal.style.display = 'none';
+      }
     });
   }
   

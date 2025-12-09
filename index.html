@@ -32,6 +32,7 @@
           <div class="logo-placeholder">
             <img src="Trailtech_AT_Monogram_Tagline.png" alt="Company Logo" class="logo">
           </div>
+          <a href="#" id="calendarAccessInfoLink" class="info-link" title="How to share calendar access">ℹ️</a>
         </div>
         
         <div class="controls">
@@ -183,6 +184,55 @@
         <div class="form-actions">
           <button id="rolesCloseBtn" class="btn btn-secondary">Close</button>
         </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Modal for calendar access instructions -->
+  <div id="calendarAccessInfoModal" class="modal" style="display: none;">
+    <div class="modal-content modal-large">
+      <span class="modal-close">&times;</span>
+      <h2>How to Add Calendar Access</h2>
+      <div class="instructions-container">
+        <div class="instruction-step">
+          <div class="step-number">1</div>
+          <div class="step-content">
+            <h3>Sign in with Work Suite Account</h3>
+            <p class="important-note">⚠️ <strong>Important:</strong> Only Work Suite Accounts with <strong>@trailtech.at</strong> email addresses are permitted to use this application.</p>
+            <p>Go to <a href="https://calendar.google.com" target="_blank">calendar.google.com</a> and sign in with your <strong>@trailtech.at</strong> Google account.</p>
+          </div>
+        </div>
+        
+        <div class="instruction-step">
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <h3>Add the Calendar</h3>
+            <p>Click the button below to open the Personnel Planning Calendar share link. This will add the calendar to your Google Calendar.</p>
+            <p><a href="#" id="calendarShareLink" target="_blank" class="btn btn-primary">Add Personnel Planning Calendar</a></p>
+            <p class="calendar-id-info">Calendar ID: <code id="displayCalendarId"></code></p>
+          </div>
+        </div>
+        
+        <div class="instruction-step">
+          <div class="step-number">3</div>
+          <div class="step-content">
+            <h3>Confirm Calendar Addition</h3>
+            <p>After clicking the link, Google Calendar will prompt you to add the calendar. Click <strong>"Add calendar"</strong> to confirm.</p>
+            <p>The calendar will appear in your Google Calendar sidebar under "Other calendars".</p>
+          </div>
+        </div>
+        
+        <div class="instruction-step">
+          <div class="step-number">4</div>
+          <div class="step-content">
+            <h3>Verify Access</h3>
+            <p>Return to this application and sign in. The app will automatically validate your access and show any errors if permissions are missing.</p>
+            <p class="important-note">⚠️ <strong>Note:</strong> You need "Make changes to events" permission to add/edit personnel, projects, roles, and calendar events. If you don't have this permission, contact your administrator.</p>
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button id="calendarAccessInfoCloseBtn" class="btn btn-secondary">Close</button>
       </div>
     </div>
   </div>
