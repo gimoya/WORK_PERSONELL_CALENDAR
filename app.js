@@ -7,6 +7,7 @@ let accessToken = null;
 let isSignedIn = false;
 let allEvents = [];
 let currentSelectInfo = null; // Store selected date range for event creation
+let currentEditingEventId = null; // Track which event is being edited
 
 // Get default config data (used when creating new config event or when not signed in)
 function getDefaultConfigData() {
@@ -683,7 +684,11 @@ function initializeUI() {
     selectable: true,
     selectMirror: true,
     dayMaxEvents: true,
-    headerToolbar: false, // No navigation buttons - month view only
+    headerToolbar: {
+      left: 'prev,next today',
+      center: 'title',
+      right: ''
+    },
     events: [],
     select: handleDateSelect,
     eventDrop: handleEventDrop,
@@ -719,7 +724,24 @@ function initializeUI() {
   // Modal event listeners
   document.getElementById('eventCreateBtn').addEventListener('click', handleEventCreate);
   document.getElementById('eventCancelBtn').addEventListener('click', closeEventModal);
+  document.getElementById('eventDeleteBtn').addEventListener('click', async () => {
+    if (currentEditingEventId && confirm('Delete this event?')) {
+      try {
+        await deleteEvent(currentEditingEventId);
+        closeEventModal();
+      } catch (error) {
+        console.error('Error deleting event:', error);
+        showStatus('Error deleting event: ' + error.message, 'error');
+      }
+    }
+  });
   document.querySelector('#eventModal .modal-close').addEventListener('click', closeEventModal);
+  
+  // New Assignment button
+  const newAssignmentBtn = document.getElementById('newAssignmentBtn');
+  if (newAssignmentBtn) {
+    newAssignmentBtn.addEventListener('click', openEventModal);
+  }
   
   // Management buttons
   document.getElementById('managePeopleBtn').addEventListener('click', () => {
@@ -873,6 +895,130 @@ function updateCalendar() {
 // Handle date selection (create new event)
 function handleDateSelect(selectInfo) {
   currentSelectInfo = selectInfo;
+  currentEditingEventId = null; // Reset edit mode for new event
+  
+  // Populate date fields from selection
+  const startDateInput = document.getElementById('eventStartDate');
+  const endDateInput = document.getElementById('eventEndDate');
+  
+  if (startDateInput && endDateInput && selectInfo) {
+    // Format dates as YYYY-MM-DD for date inputs
+    startDateInput.value = formatLocalDate(selectInfo.start);
+    // End date is exclusive in FullCalendar, so subtract 1 day for the input
+    const endDate = new Date(selectInfo.end);
+    endDate.setDate(endDate.getDate() - 1);
+    endDateInput.value = formatLocalDate(endDate);
+  }
+  
+  // Populate dropdowns
+  const personSelect = document.getElementById('eventPerson');
+  const projectSelect = document.getElementById('eventProject');
+  const roleSelect = document.getElementById('eventRole');
+  
+  if (!personSelect || !projectSelect || !roleSelect) {
+    console.error('Modal dropdown elements not found');
+    return;
+  }
+  
+  // Clear existing options (except first)
+  personSelect.innerHTML = '<option value="">Select personnel...</option>';
+  projectSelect.innerHTML = '<option value="">Select a project...</option>';
+  roleSelect.innerHTML = '<option value="">Select a role...</option>';
+  
+  // Populate person dropdown
+  if (CONFIG.personnel && CONFIG.personnel.length > 0) {
+    CONFIG.personnel.forEach(person => {
+      const option = document.createElement('option');
+      const personName = typeof person === 'string' ? person : person.name;
+      option.value = personName;
+      option.textContent = personName;
+      personSelect.appendChild(option);
+    });
+  }
+  
+  // Populate project dropdown
+  if (CONFIG.projects && CONFIG.projects.length > 0) {
+    CONFIG.projects.forEach(project => {
+      const option = document.createElement('option');
+      const projectName = typeof project === 'string' ? project : project.name;
+      option.value = projectName;
+      option.textContent = projectName;
+      projectSelect.appendChild(option);
+    });
+  }
+  
+  // Populate role dropdown
+  if (CONFIG.roles && CONFIG.roles.length > 0) {
+    if (roleSelect) {
+      roleSelect.innerHTML = '<option value="">Select a role...</option>';
+      
+      CONFIG.roles.forEach(role => {
+        const roleName = typeof role === 'string' ? role : role.name;
+        if (roleName && roleName.trim()) {
+          const option = document.createElement('option');
+          option.value = roleName;
+          option.textContent = roleName;
+          roleSelect.appendChild(option);
+        }
+      });
+    }
+  }
+  
+  // Reset modal title and button text for new event
+  const modalTitle = document.querySelector('#eventModal h2');
+  if (modalTitle) {
+    modalTitle.textContent = 'Create New Assignment';
+  }
+  const createBtn = document.getElementById('eventCreateBtn');
+  if (createBtn) {
+    createBtn.textContent = 'Create';
+  }
+  const deleteBtn = document.getElementById('eventDeleteBtn');
+  if (deleteBtn) {
+    deleteBtn.style.display = 'none';
+  }
+  
+  // Show modal
+  const eventModal = document.getElementById('eventModal');
+  if (eventModal) {
+    eventModal.style.display = 'block';
+    
+    // Double-check role dropdown after modal is shown
+    setTimeout(() => {
+      const roleSelectCheck = document.getElementById('eventRole');
+      if (roleSelectCheck && roleSelectCheck.options.length <= 1) {
+        // Repopulate if still empty
+        roleSelectCheck.innerHTML = '<option value="">Select a role...</option>';
+        const rolesToAdd = CONFIG.roles && CONFIG.roles.length > 0 
+          ? CONFIG.roles 
+          : ['Project-Manager', 'Foreman', 'Shaper', 'Operator-Shaper'];
+        rolesToAdd.forEach(role => {
+          if (role && role.trim()) {
+            const option = document.createElement('option');
+            option.value = role;
+            option.textContent = role;
+            roleSelectCheck.appendChild(option);
+          }
+        });
+      }
+    }, 100);
+  }
+}
+
+// Open event modal without date selection
+function openEventModal() {
+  currentSelectInfo = null;
+  currentEditingEventId = null; // Reset edit mode
+  
+  // Set default dates to today (single day event)
+  const startDateInput = document.getElementById('eventStartDate');
+  const endDateInput = document.getElementById('eventEndDate');
+  const today = new Date();
+  
+  if (startDateInput && endDateInput) {
+    startDateInput.value = formatLocalDate(today);
+    endDateInput.value = formatLocalDate(today);
+  }
   
   // Populate dropdowns
   const personSelect = document.getElementById('eventPerson');
@@ -959,33 +1105,77 @@ function handleDateSelect(selectInfo) {
 function closeEventModal() {
   document.getElementById('eventModal').style.display = 'none';
   currentSelectInfo = null;
+  currentEditingEventId = null;
+  
+  // Reset modal title
+  const modalTitle = document.querySelector('#eventModal h2');
+  if (modalTitle) {
+    modalTitle.textContent = 'Create New Assignment';
+  }
+  
+  // Reset button text
+  const createBtn = document.getElementById('eventCreateBtn');
+  if (createBtn) {
+    createBtn.textContent = 'Create';
+  }
+  
+  // Hide delete button
+  const deleteBtn = document.getElementById('eventDeleteBtn');
+  if (deleteBtn) {
+    deleteBtn.style.display = 'none';
+  }
+  
   if (calendar) {
     calendar.unselect();
   }
 }
 
-// Handle event creation from modal
+// Handle event creation/update from modal
 async function handleEventCreate() {
   const person = document.getElementById('eventPerson').value;
   const project = document.getElementById('eventProject').value;
   const role = document.getElementById('eventRole').value;
+  const startDateInput = document.getElementById('eventStartDate');
+  const endDateInput = document.getElementById('eventEndDate');
   
   if (!person || !project || !role) {
     showStatus('Please select personnel, project, and role', 'error');
     return;
   }
   
-  if (!currentSelectInfo) {
-    showStatus('No date range selected', 'error');
+  if (!startDateInput || !startDateInput.value) {
+    showStatus('Please select a start date', 'error');
     return;
   }
   
+  if (!endDateInput || !endDateInput.value) {
+    showStatus('Please select an end date', 'error');
+    return;
+  }
+  
+  // Parse dates from inputs (use local timezone, not UTC)
+  // Date input value is in YYYY-MM-DD format, parse it as local date
+  const startDateParts = startDateInput.value.split('-');
+  const endDateParts = endDateInput.value.split('-');
+  const startDate = new Date(parseInt(startDateParts[0]), parseInt(startDateParts[1]) - 1, parseInt(startDateParts[2]));
+  const endDate = new Date(parseInt(endDateParts[0]), parseInt(endDateParts[1]) - 1, parseInt(endDateParts[2]));
+  
+  // End date should be exclusive (day after last day) for Google Calendar
+  const endDateExclusive = new Date(endDate);
+  endDateExclusive.setDate(endDateExclusive.getDate() + 1);
+  
   try {
-    await createEvent(person, project, role, currentSelectInfo.start, currentSelectInfo.end);
+    if (currentEditingEventId) {
+      // Update existing event
+      await updateEvent(currentEditingEventId, startDate, endDateExclusive, person, project, role);
+    } else {
+      // Create new event
+      await createEvent(person, project, role, startDate, endDateExclusive);
+    }
     closeEventModal();
   } catch (error) {
-    console.error('Error creating event:', error);
-    showStatus('Error creating event: ' + error.message, 'error');
+    console.error('Error saving event:', error);
+    showStatus('Error saving event: ' + error.message, 'error');
   }
 }
 
@@ -1005,10 +1195,8 @@ async function createEvent(person, project, role, start, end) {
   // For all-day events, Google Calendar expects dates in YYYY-MM-DD format
   // We need to use local date, not UTC, to prevent day shifts
   const startDate = formatLocalDate(start);
-  // End date should be exclusive (day after last day), so add 1 day
-  const endDateObj = new Date(end);
-  endDateObj.setDate(endDateObj.getDate() + 1);
-  const endDate = formatLocalDate(endDateObj);
+  // End date is already exclusive (day after last day) - no need to add another day
+  const endDate = formatLocalDate(end);
   
   const event = {
     summary: `${person} - ${project} - ${role}`,
@@ -1077,7 +1265,7 @@ async function handleEventResize(resizeInfo) {
 }
 
 // Update event
-async function updateEvent(eventId, start, end) {
+async function updateEvent(eventId, start, end, person, project, role) {
   showStatus('Updating event...', 'loading');
   
   // Find the original event
@@ -1088,13 +1276,12 @@ async function updateEvent(eventId, start, end) {
   
   // Use local date formatting to avoid timezone issues
   const startDate = formatLocalDate(start);
-  // End date should be exclusive (day after last day), so add 1 day
-  const endDateObj = new Date(end);
-  endDateObj.setDate(endDateObj.getDate() + 1);
-  const endDate = formatLocalDate(endDateObj);
+  // End date from FullCalendar is already exclusive (day after last day), so don't add another day
+  const endDate = formatLocalDate(end);
   
   const update = {
     ...gcalEvent,
+    summary: `${person} - ${project} - ${role}`,
     start: {
       date: startDate
     },
@@ -1132,17 +1319,113 @@ async function updateEvent(eventId, start, end) {
   }
 }
 
-// Handle event click (delete)
+// Handle event click (edit)
 async function handleEventClick(clickInfo) {
-  if (confirm('Delete this event?')) {
-    const eventId = clickInfo.event.extendedProps.gcalEvent.id;
+  const gcalEvent = clickInfo.event.extendedProps.gcalEvent;
+  const { person, project, role } = parseEvent(gcalEvent);
+  
+  // Store the event ID for editing
+  currentEditingEventId = gcalEvent.id;
+  
+  // Populate date fields
+  const startDateInput = document.getElementById('eventStartDate');
+  const endDateInput = document.getElementById('eventEndDate');
+  
+  if (startDateInput && endDateInput) {
+    // Parse start date (all-day events use date, not dateTime)
+    const startDate = gcalEvent.start.date || gcalEvent.start.dateTime;
+    const endDate = gcalEvent.end.date || gcalEvent.end.dateTime;
     
-    try {
-      await deleteEvent(eventId);
-    } catch (error) {
-      console.error('Error deleting event:', error);
-      showStatus('Error deleting event: ' + error.message, 'error');
-    }
+    // Format dates for inputs
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    startDateInput.value = formatLocalDate(start);
+    // End date is exclusive, so subtract 1 day for the input
+    const endDateForInput = new Date(end);
+    endDateForInput.setDate(endDateForInput.getDate() - 1);
+    endDateInput.value = formatLocalDate(endDateForInput);
+  }
+  
+  // Populate dropdowns
+  const personSelect = document.getElementById('eventPerson');
+  const projectSelect = document.getElementById('eventProject');
+  const roleSelect = document.getElementById('eventRole');
+  
+  if (!personSelect || !projectSelect || !roleSelect) {
+    console.error('Modal dropdown elements not found');
+    return;
+  }
+  
+  // Clear and populate person dropdown
+  personSelect.innerHTML = '<option value="">Select personnel...</option>';
+  if (CONFIG.personnel && CONFIG.personnel.length > 0) {
+    CONFIG.personnel.forEach(p => {
+      const personName = typeof p === 'string' ? p : p.name;
+      const option = document.createElement('option');
+      option.value = personName;
+      option.textContent = personName;
+      if (personName === person) {
+        option.selected = true;
+      }
+      personSelect.appendChild(option);
+    });
+  }
+  
+  // Clear and populate project dropdown
+  projectSelect.innerHTML = '<option value="">Select a project...</option>';
+  if (CONFIG.projects && CONFIG.projects.length > 0) {
+    CONFIG.projects.forEach(proj => {
+      const projectName = typeof proj === 'string' ? proj : proj.name;
+      const option = document.createElement('option');
+      option.value = projectName;
+      option.textContent = projectName;
+      if (projectName === project) {
+        option.selected = true;
+      }
+      projectSelect.appendChild(option);
+    });
+  }
+  
+  // Clear and populate role dropdown
+  roleSelect.innerHTML = '<option value="">Select a role...</option>';
+  if (CONFIG.roles && CONFIG.roles.length > 0) {
+    CONFIG.roles.forEach(r => {
+      const roleName = typeof r === 'string' ? r : r.name;
+      if (roleName && roleName.trim()) {
+        const option = document.createElement('option');
+        option.value = roleName;
+        option.textContent = roleName;
+        if (roleName === role) {
+          option.selected = true;
+        }
+        roleSelect.appendChild(option);
+      }
+    });
+  }
+  
+  // Update modal title
+  const modalTitle = document.querySelector('#eventModal h2');
+  if (modalTitle) {
+    modalTitle.textContent = 'Edit Assignment';
+  }
+  
+  // Update button text
+  const createBtn = document.getElementById('eventCreateBtn');
+  if (createBtn) {
+    createBtn.textContent = 'Update';
+  }
+  
+  // Show delete button
+  const deleteBtn = document.getElementById('eventDeleteBtn');
+  if (deleteBtn) {
+    deleteBtn.style.display = 'inline-block';
+  }
+  
+  // Show modal
+  const eventModal = document.getElementById('eventModal');
+  if (eventModal) {
+    eventModal.style.display = 'block';
   }
 }
 
@@ -1615,7 +1898,8 @@ function renderCompactYearView() {
         const end = new Date(event.end);
         const current = new Date(start);
         
-        while (current <= end) {
+        // End date is exclusive in Google Calendar, so iterate while current < end (not <=)
+        while (current < end) {
           // Use local date formatting to avoid timezone issues
           const dateKey = formatLocalDate(current);
           dateSet.add(dateKey);

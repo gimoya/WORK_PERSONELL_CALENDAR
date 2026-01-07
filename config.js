@@ -12,7 +12,10 @@ const CONFIG = {
   // Share link for the calendar
   shareLink: 'https://calendar.google.com/calendar/u/1?cid=Y184YTgyZDJkNmQ1NGVjNTQ1ZjYwMTk4NzBjZGUxNTZjM2I0ZjBiMzM4ZDc2MDA5MWY4OGMzMjkzNThlMGRlODY3QGdyb3VwLmNhbGVuZGFyLmdvb2dsZS5jb20',
   
-  // These will be loaded from calendar event
+  // Placeholder arrays - DO NOT add data here!
+  // These are overwritten when you sign in. All personnel, projects, and roles
+  // are stored in the calendar event (__PERSONNEL_CONFIG__) for sharing across users.
+  // Use the "Manage Personnel", "Manage Projects", and "Manage Roles" buttons in the UI.
   personnel: [],
   projects: [],
   roles: []

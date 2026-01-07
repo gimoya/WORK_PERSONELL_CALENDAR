@@ -69,34 +69,22 @@ A drag-and-drop web application for visual personnel allocation planning using G
 1. Open `config.js`
 2. Update `calendarId` with your calendar ID from Step 1
 3. Update `oauthClientId` with your OAuth Client ID from Step 3
-4. Update `people` array with your team member names and colors
-5. Update `projects` array with your project names
-6. Update `roles` array with your role definitions:
+4. Update `shareLink` with your calendar's share link (optional, but helpful for the access instructions)
 
 ```javascript
 const CONFIG = {
   calendarId: 'your-calendar-id@group.calendar.google.com',
   oauthClientId: 'YOUR_CLIENT_ID.apps.googleusercontent.com',
-  people: [
-    { name: 'John', color: '#4285f4' },
-    { name: 'Sarah', color: '#ea4335' },
-    { name: 'Mike', color: '#fbbc04' },
-    // ... add your people with colors
-  ],
-  projects: [
-    'Project Alpha',
-    'Project Beta',
-    // ... add your projects
-  ],
-  roles: [
-    'Project-Manager',
-    'Foreman',
-    'Shaper',
-    'Operator-Shaper'
-    // ... add your roles
-  ]
+  shareLink: 'https://calendar.google.com/calendar/u/1?cid=YOUR_CALENDAR_ID',
+  // Note: personnel, projects, and roles are stored in the calendar event,
+  // not in this config file. They will be loaded automatically when you sign in.
+  personnel: [],
+  projects: [],
+  roles: []
 };
 ```
+
+**Important**: Personnel, projects, and roles are **not** configured in `config.js`. They are stored in a special calendar event and shared across all users. After signing in, use the "Manage Personnel", "Manage Projects", and "Manage Roles" buttons in the interface to add/edit them.
 
 ### Step 5: Deploy or Run Locally
 
@@ -236,43 +224,21 @@ Examples:
 
 ## Customization
 
-### Adding People
-Edit `config.js` and add people to the `people` array with names and colors:
-```javascript
-people: [
-  { name: 'John', color: '#4285f4' },
-  { name: 'Sarah', color: '#ea4335' },
-  // ... add more people
-]
-```
+### Adding Personnel, Projects, and Roles
 
-### Adding Projects
-Edit `config.js` and add project names to the `projects` array:
-```javascript
-projects: [
-  'Project Alpha',
-  'Project Beta',
-  // ... add more projects
-]
-```
+**All data is stored in the calendar event and shared across users.** Use the management buttons in the interface:
 
-### Adding Roles
-Edit `config.js` and add roles to the `roles` array:
-```javascript
-roles: [
-  'Project-Manager',
-  'Foreman',
-  'Shaper',
-  'Operator-Shaper',
-  // ... add more roles
-]
-```
+1. **Adding Personnel**: Click "Manage Personnel" → Enter name → Click "Add Personnel"
+2. **Adding Projects**: Click "Manage Projects" → Enter project name → Click "Add Project"
+3. **Adding Roles**: Click "Manage Roles" → Enter role name and select color → Click "Add Role"
 
-### Changing Person Colors
-Update the `color` property in the `people` array. Use hex colors (e.g., `#4285f4`).
+Changes are automatically saved to the calendar event and will be visible to all users with access to the calendar.
 
-### Managing People and Projects
-Use the "Manage People" and "Manage Projects" buttons in the interface to add, edit, or remove entries without editing the config file directly.
+### Changing Role Colors
+
+Click "Manage Roles" → Click the color picker next to any role → Select a new color. The change is saved automatically.
+
+**Note**: Personnel, projects, and roles are **not** stored in `config.js`. They are stored in a special calendar event (`__PERSONNEL_CONFIG__` on 2000-01-01) for sharing across all users. The arrays in `config.js` are placeholders that get overwritten when you sign in.
 
 ## License
 
