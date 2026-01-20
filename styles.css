@@ -269,6 +269,14 @@ body {
   opacity: 0.9;
 }
 
+.fc-event-resizer {
+  cursor: ns-resize;
+}
+
+.fc-event-resizer:hover {
+  opacity: 1;
+}
+
 .fc-daygrid-event {
   white-space: normal;
   word-wrap: break-word;
@@ -448,6 +456,39 @@ body {
   gap: 5px;
 }
 
+/* Role color editing UI */
+.role-color-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.role-color-preview {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  border: 2px solid #dadce0;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.role-color-preview:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.role-color-picker {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
 .btn-small {
   padding: 4px 12px;
   font-size: 12px;
@@ -554,8 +595,7 @@ body {
   background-color: #f8f9fa;
 }
 
-.overview-table .header-row-day th.day-header.conflict,
-.overview-table td.person-col.conflict {
+.overview-table .header-row-day th.day-header.conflict {
   background-color: #ffcccc;
   background-image: repeating-linear-gradient(
     45deg,
@@ -563,6 +603,16 @@ body {
     transparent 4px,
     rgba(255, 0, 0, 0.2) 4px,
     rgba(255, 0, 0, 0.2) 8px
+  );
+}
+
+.overview-table td.person-col.conflict {
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 4px,
+    rgba(255, 0, 0, 0.3) 4px,
+    rgba(255, 0, 0, 0.3) 8px
   );
 }
 
@@ -688,7 +738,7 @@ body {
 }
 
 .overview-table td.day-cell.weekend {
-  background-color: #fffde7;
+  background-color: #e8eaed;
 }
 
 .overview-table td.day-cell.today {

@@ -13,12 +13,12 @@ let currentEditingEventId = null; // Track which event is being edited
 function getDefaultConfigData() {
   return {
     personnel: [],
-    projects: [],
+    projects: [], // Projects will be objects with { name, color }
     roles: [
-      { name: 'Project-Manager', color: '#4285f4' },
-      { name: 'Foreman', color: '#ea4335' },
-      { name: 'Shaper', color: '#fbbc04' },
-      { name: 'Operator-Shaper', color: '#34a853' }
+      'Project-Manager',
+      'Foreman',
+      'Shaper',
+      'Operator-Shaper'
     ]
   };
 }
@@ -95,16 +95,13 @@ async function loadConfigFromCalendar() {
     if (configEvent?.extendedProperties?.shared?.personnelConfig) {
       const configData = JSON.parse(configEvent.extendedProperties.shared.personnelConfig);
       
-      // Migrate roles from old format (strings) to new format (objects with colors)
+      // Roles are now just strings (no colors) - migrate from old format if needed
       if (configData.roles && Array.isArray(configData.roles)) {
-        const defaultColors = ['#4285f4', '#ea4335', '#fbbc04', '#34a853', '#9c27b0', '#ff9800', '#00bcd4', '#795548', '#607d8b', '#e91e63'];
-        CONFIG.roles = configData.roles.map((role, index) => {
-          if (typeof role === 'string') {
-            return { name: role, color: defaultColors[index % defaultColors.length] };
-          }
-          return { name: role.name || role, color: role.color || defaultColors[index % defaultColors.length] };
-        });
-      } else {
+        CONFIG.roles = configData.roles.map((role) => {
+          // Convert old format (objects with colors) to new format (strings)
+          return typeof role === 'string' ? role : (role.name || role);
+      });
+    } else {
         // Use defaults if no roles
         const defaultData = getDefaultConfigData();
         CONFIG.roles = defaultData.roles;
@@ -122,13 +119,17 @@ async function loadConfigFromCalendar() {
       }
       
       if (configData.projects && Array.isArray(configData.projects)) {
-        CONFIG.projects = configData.projects.map(project => {
-          return typeof project === 'string' ? project : (project.name || project);
-        });
-      } else {
-        CONFIG.projects = [];
-      }
+      const defaultColors = ['#4285f4', '#ea4335', '#fbbc04', '#34a853', '#9c27b0', '#ff9800', '#00bcd4', '#795548', '#607d8b', '#e91e63'];
+        CONFIG.projects = configData.projects.map((project, index) => {
+          if (typeof project === 'string') {
+            return { name: project, color: defaultColors[index % defaultColors.length] };
+          }
+          return { name: project.name || project, color: project.color || defaultColors[index % defaultColors.length] };
+      });
     } else {
+        CONFIG.projects = [];
+    }
+  } else {
       // No config data, use defaults
       const defaultData = getDefaultConfigData();
       CONFIG.personnel = defaultData.personnel;
@@ -581,10 +582,18 @@ function parseEvent(event) {
   return { person: '', project: summary, role: '' };
 }
 
-// Get role color
-function getRoleColor(roleName) {
-  const roleConfig = CONFIG.roles.find(r => (r.name || r) === roleName);
-  return roleConfig ? (roleConfig.color || '#9aa0a6') : '#9aa0a6';
+// Get project color
+function getProjectColor(projectName) {
+  const projectConfig = CONFIG.projects.find(p => (typeof p === 'string' ? p : p.name) === projectName);
+  return projectConfig ? (projectConfig.color || '#4285f4') : '#4285f4';
+}
+
+// Convert hex color to rgba
+function hexToRgba(hex, alpha) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 // Check if person, project, or role exists in CONFIG
@@ -617,9 +626,9 @@ function isValidEvent(person, project, role) {
 function toFullCalendarEvent(gcalEvent) {
   const { person, project, role } = parseEvent(gcalEvent);
   
-  // Check if event references removed items - if so, use grey color
+  // Use project color for calendar events
   const isValid = isValidEvent(person, project, role);
-  const color = isValid ? getRoleColor(role) : '#9aa0a6';
+  const color = isValid ? getProjectColor(project) : '#9aa0a6';
   
   const start = gcalEvent.start.dateTime || gcalEvent.start.date;
   const end = gcalEvent.end.dateTime || gcalEvent.end.date;
@@ -680,6 +689,8 @@ function initializeUI() {
     weekNumbers: true, // Display week numbers
     weekNumberCalculation: 'ISO', // ISO week numbering (Monday as first day)
     editable: true,
+    eventStartEditable: true, // Allow dragging events to change start date
+    eventDurationEditable: true, // Allow resizing events to change duration
     droppable: false,
     selectable: true,
     selectMirror: true,
@@ -949,9 +960,9 @@ function handleDateSelect(selectInfo) {
   
   // Populate role dropdown
   if (CONFIG.roles && CONFIG.roles.length > 0) {
-    if (roleSelect) {
-      roleSelect.innerHTML = '<option value="">Select a role...</option>';
-      
+  if (roleSelect) {
+    roleSelect.innerHTML = '<option value="">Select a role...</option>';
+    
       CONFIG.roles.forEach(role => {
         const roleName = typeof role === 'string' ? role : role.name;
         if (roleName && roleName.trim()) {
@@ -992,11 +1003,11 @@ function handleDateSelect(selectInfo) {
         const rolesToAdd = CONFIG.roles && CONFIG.roles.length > 0 
           ? CONFIG.roles 
           : ['Project-Manager', 'Foreman', 'Shaper', 'Operator-Shaper'];
-        rolesToAdd.forEach(role => {
+    rolesToAdd.forEach(role => {
           if (role && role.trim()) {
-            const option = document.createElement('option');
-            option.value = role;
-            option.textContent = role;
+        const option = document.createElement('option');
+        option.value = role;
+        option.textContent = role;
             roleSelectCheck.appendChild(option);
           }
         });
@@ -1068,9 +1079,9 @@ function openEventModal() {
           const option = document.createElement('option');
           option.value = roleName;
           option.textContent = roleName;
-          roleSelect.appendChild(option);
-        }
-      });
+        roleSelect.appendChild(option);
+      }
+    });
     }
   }
   
@@ -1281,7 +1292,6 @@ async function updateEvent(eventId, start, end, person, project, role) {
   
   const update = {
     ...gcalEvent,
-    summary: `${person} - ${project} - ${role}`,
     start: {
       date: startDate
     },
@@ -1289,6 +1299,12 @@ async function updateEvent(eventId, start, end, person, project, role) {
       date: endDate
     }
   };
+  
+  // Only update summary if person, project, and role are provided (from modal edit)
+  // Otherwise preserve original summary (from drag/resize)
+  if (person && project && role) {
+    update.summary = `${person} - ${project} - ${role}`;
+  }
   
   try {
     const response = await gapiClient.calendar.events.update({
@@ -1569,22 +1585,54 @@ function updateProjectsList() {
   
   CONFIG.projects.forEach((project, index) => {
     const projectName = typeof project === 'string' ? project : project.name;
+    const projectColor = typeof project === 'string' ? '#4285f4' : (project.color || '#4285f4');
     const item = document.createElement('div');
     item.className = 'item-list-item';
     item.innerHTML = `
+      <div class="role-color-container">
+        <div class="role-color-preview" style="background-color: ${projectColor};" data-index="${index}"></div>
+        <input type="color" class="role-color-picker" value="${projectColor}" data-index="${index}" title="Click to change color">
+      </div>
       <span class="item-name">${projectName}</span>
       <div class="item-actions">
         <button class="btn btn-small btn-secondary" onclick="removeProject(${index})">Remove</button>
       </div>
     `;
     projectsList.appendChild(item);
+    
+    // Add color change handler
+    const colorPicker = item.querySelector('.role-color-picker');
+    const colorPreview = item.querySelector('.role-color-preview');
+    colorPicker.addEventListener('change', (e) => {
+      const newColor = e.target.value;
+      if (typeof CONFIG.projects[index] === 'string') {
+        CONFIG.projects[index] = { name: CONFIG.projects[index], color: newColor };
+      } else {
+        CONFIG.projects[index].color = newColor;
+      }
+      // Update preview immediately
+      colorPreview.style.backgroundColor = newColor;
+      saveConfig();
+      updateCalendar();
+      updatePersonnelLegend();
+      if (document.getElementById('overviewToggleBtn')?.textContent === 'Scheduling') {
+        renderCompactYearView();
+      }
+    });
+    
+    // Click on preview to trigger color picker
+    colorPreview.addEventListener('click', () => {
+      colorPicker.click();
+    });
   });
 }
 
 // Add project
 function addProject() {
   const nameInput = document.getElementById('newProjectName');
+  const colorInput = document.getElementById('newProjectColor');
   const name = nameInput.value.trim();
+  const color = colorInput.value;
   
   if (!name) {
     showStatus('Please enter a project name', 'error');
@@ -1598,11 +1646,13 @@ function addProject() {
     return;
   }
   
-  CONFIG.projects.push(name);
+  CONFIG.projects.push({ name: name, color: color });
   saveConfig();
   updateProjectsList();
   updateFilters();
+  updatePersonnelLegend();
   nameInput.value = '';
+  colorInput.value = '#4285f4';
   showStatus('Project added successfully', 'success');
   setTimeout(() => hideStatus(), 2000);
 }
@@ -1616,6 +1666,10 @@ function removeProject(index) {
     saveConfig();
     updateProjectsList();
     updateFilters();
+    updatePersonnelLegend();
+    if (document.getElementById('overviewToggleBtn')?.textContent === 'Scheduling') {
+      renderCompactYearView();
+    }
     showStatus('Project removed', 'success');
     setTimeout(() => hideStatus(), 2000);
   }
@@ -1626,12 +1680,12 @@ function updatePersonnelLegend() {
   const legendContainer = document.getElementById('personnelLegend');
   if (!legendContainer) return;
   
-  const legendItems = CONFIG.roles.map(role => {
-    const roleName = typeof role === 'string' ? role : role.name;
-    const roleColor = typeof role === 'string' ? '#9aa0a6' : (role.color || '#9aa0a6');
+  const legendItems = CONFIG.projects.map(project => {
+    const projectName = typeof project === 'string' ? project : project.name;
+    const projectColor = typeof project === 'string' ? '#4285f4' : (project.color || '#4285f4');
     return `<div class="personnel-legend-item">
-      <div class="personnel-legend-color" style="background-color: ${roleColor};"></div>
-      <span class="personnel-legend-name">${roleName}</span>
+      <div class="personnel-legend-color" style="background-color: ${projectColor};"></div>
+      <span class="personnel-legend-name">${projectName}</span>
     </div>`;
   }).join('');
   
@@ -1691,42 +1745,22 @@ function updateRolesList() {
   
   CONFIG.roles.forEach((role, index) => {
     const roleName = typeof role === 'string' ? role : role.name;
-    const roleColor = typeof role === 'string' ? '#9aa0a6' : (role.color || '#9aa0a6');
     const item = document.createElement('div');
     item.className = 'item-list-item';
     item.innerHTML = `
-      <input type="color" class="role-color-picker" value="${roleColor}" data-index="${index}" style="width: 30px; height: 30px; border: none; cursor: pointer; border-radius: 4px;">
       <span class="item-name">${roleName}</span>
       <div class="item-actions">
         <button class="btn btn-small btn-secondary" onclick="removeRole(${index})">Remove</button>
       </div>
     `;
     rolesList.appendChild(item);
-    
-    // Add color change handler
-    const colorPicker = item.querySelector('.role-color-picker');
-    colorPicker.addEventListener('change', (e) => {
-      if (typeof CONFIG.roles[index] === 'string') {
-        CONFIG.roles[index] = { name: CONFIG.roles[index], color: e.target.value };
-      } else {
-        CONFIG.roles[index].color = e.target.value;
-      }
-      saveConfig();
-      updateCalendar();
-      updatePersonnelLegend();
-      if (document.getElementById('overviewToggleBtn')?.textContent === 'Scheduling') {
-        renderCompactYearView();
-      }
-    });
   });
 }
 
 // Add role
 function addRole() {
   const nameInput = document.getElementById('newRoleName');
-  const colorInput = document.getElementById('newRoleColor');
   const name = nameInput.value.trim();
-  const color = colorInput.value;
   
   if (!name) {
     showStatus('Please enter a role name', 'error');
@@ -1740,7 +1774,8 @@ function addRole() {
     return;
   }
   
-  CONFIG.roles.push({ name: name, color: color });
+  // Roles are now just strings (no color)
+  CONFIG.roles.push(name);
   saveConfig();
   updateRolesList();
   updatePersonnelLegend();
@@ -1752,7 +1787,6 @@ function addRole() {
   }
   
   nameInput.value = '';
-  colorInput.value = '#4285f4';
   showStatus('Role added successfully', 'success');
   setTimeout(() => hideStatus(), 2000);
 }
@@ -2071,6 +2105,7 @@ function renderCompactYearView() {
   // Group data rows by project (one card per project)
   projectsToShow.forEach(project => {
     const projectName = typeof project === 'string' ? project : project.name;
+    const projectColor = getProjectColor(projectName);
     
     // Skip if project name is invalid
     if (!projectName || projectName.trim() === '' || projectName === '...') {
@@ -2128,7 +2163,6 @@ function renderCompactYearView() {
         return;
       }
       
-      const roleColor = getRoleColor(role);
       const dateSet = new Set(dates);
       const isFirstRow = index === 0;
       const rowSpan = personRoleKeys.length;
@@ -2141,20 +2175,22 @@ function renderCompactYearView() {
       });
       const personColClass = hasPersonConflict ? 'person-col conflict' : 'person-col';
       
-      html += `<tr class="data-row">`;
+      // Apply semi-transparent project color to row
+      const projectColorRgba = hexToRgba(projectColor, 0.15);
+      html += `<tr class="data-row" style="background-color: ${projectColorRgba};">`;
       
       // Project column (only in first row, spans all rows for this project, rotated 90°)
       if (isFirstRow) {
-        html += `<td class="project-col" rowspan="${rowSpan}">
+        html += `<td class="project-col" rowspan="${rowSpan}" style="background-color: ${projectColor};">
           <div class="project-name-rotated">${projectName}</div>
         </td>`;
       }
       
-      // Role column (with role color background)
-      html += `<td class="role-col" style="background-color: ${roleColor};">${role}</td>`;
+      // Role column with project color
+      html += `<td class="role-col" style="background-color: ${projectColor};">${role}</td>`;
       
-      // Person column (diagonal stripe pattern if this person has conflicts)
-      html += `<td class="${personColClass}">${person}</td>`;
+      // Person column with project color (diagonal stripe pattern if this person has conflicts)
+      html += `<td class="${personColClass}" style="background-color: ${projectColor};">${person}</td>`;
       
       // Day cells
       allDays.forEach((dayInfo, dayIndex) => {
@@ -2183,15 +2219,18 @@ function renderCompactYearView() {
           }
         }
         
+        // For weekend cells, add semi-transparent project color overlay
+        const weekendOverlay = dayInfo.isWeekend ? `background-color: ${hexToRgba(projectColor, 0.3)};` : '';
         html += `<td class="day-cell ${isToday ? 'today' : ''} ${hasPerson ? 'has-personnel' : ''} ${dayInfo.isWeekend ? 'weekend' : ''} ${barClass}" 
           data-date="${dayInfo.dateKey}"
           data-person="${person}"
+          style="${weekendOverlay}"
           title="${dayInfo.date.toLocaleDateString()} - ${projectName} - ${person} (${role})">`;
         
         html += `<div class="day-number-in-cell">${dayInfo.day}</div>`;
         
         if (hasPerson) {
-          html += `<div class="person-role-bar" style="background-color: ${roleColor};"></div>`;
+          html += `<div class="person-role-bar" style="background-color: ${projectColor};"></div>`;
         }
         
         html += `</td>`;
