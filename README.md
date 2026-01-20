@@ -67,15 +67,27 @@ A drag-and-drop web application for visual personnel allocation planning using G
 ### Step 4: Configure the App
 
 1. Open `config.js`
-2. Update `calendarId` with your calendar ID from Step 1
-3. Update `oauthClientId` with your OAuth Client ID from Step 3
-4. Update `shareLink` with your calendar's share link (optional, but helpful for the access instructions)
+2. Set the default `year` (e.g., `2026`)
+3. Add calendar IDs for each year in the `calendarIds` object
+4. Update `oauthClientId` with your OAuth Client ID from Step 3
+5. Update `shareLink` with your calendar's share link (optional, but helpful for the access instructions)
 
 ```javascript
 const CONFIG = {
-  calendarId: 'your-calendar-id@group.calendar.google.com',
+  // Current year this calendar instance is configured for
+  year: 2026,
+  
+  // Calendar ID mapping by year
+  // Each year requires its own separate Google Calendar
+  calendarIds: {
+    2026: 'your-calendar-id-2026@group.calendar.google.com',
+    // 2027: 'your-calendar-id-2027@group.calendar.google.com',
+    // 2028: 'your-calendar-id-2028@group.calendar.google.com',
+  },
+  
   oauthClientId: 'YOUR_CLIENT_ID.apps.googleusercontent.com',
   shareLink: 'https://calendar.google.com/calendar/u/1?cid=YOUR_CALENDAR_ID',
+  
   // Note: personnel, projects, and roles are stored in the calendar event,
   // not in this config file. They will be loaded automatically when you sign in.
   personnel: [],
@@ -84,7 +96,10 @@ const CONFIG = {
 };
 ```
 
-**Important**: Personnel, projects, and roles are **not** configured in `config.js`. They are stored in a special calendar event and shared across all users. After signing in, use the "Manage Personnel", "Manage Projects", and "Manage Roles" buttons in the interface to add/edit them.
+**Important**: 
+- Personnel, projects, and roles are **not** configured in `config.js`. They are stored in a special calendar event and shared across all users. After signing in, use the "Manage Personnel", "Manage Projects", and "Manage Roles" buttons in the interface to add/edit them.
+- **Year Restriction**: The calendar is restricted to the configured year. Events can only be created, moved, or resized within that year's date range.
+- **Multi-Year Support**: Each year requires its own separate Google Calendar. See "Adding New Years" section below.
 
 ### Step 5: Deploy or Run Locally
 
@@ -230,15 +245,61 @@ Examples:
 
 1. **Adding Personnel**: Click "Manage Personnel" → Enter name → Click "Add Personnel"
 2. **Adding Projects**: Click "Manage Projects" → Enter project name → Click "Add Project"
-3. **Adding Roles**: Click "Manage Roles" → Enter role name and select color → Click "Add Role"
+3. **Adding Roles**: Click "Manage Roles" → Enter role name → Click "Add Role"
 
 Changes are automatically saved to the calendar event and will be visible to all users with access to the calendar.
 
-### Changing Role Colors
+### Changing Project Colors
 
-Click "Manage Roles" → Click the color picker next to any role → Select a new color. The change is saved automatically.
+Click "Manage Projects" → Click the color picker next to any project → Select a new color. The change is saved automatically and will be reflected in the calendar view, overview, and legend.
 
 **Note**: Personnel, projects, and roles are **not** stored in `config.js`. They are stored in a special calendar event (`__PERSONNEL_CONFIG__` on 2000-01-01) for sharing across all users. The arrays in `config.js` are placeholders that get overwritten when you sign in.
+
+### Adding New Years
+
+Each year requires its own separate Google Calendar. To add support for a new year (e.g., 2027):
+
+1. **Create a new Google Calendar** for that year:
+   - Go to Google Calendar
+   - Click the "+" next to "Other calendars"
+   - Select "Create new calendar"
+   - Name it appropriately (e.g., "Personnel Planning 2027")
+   - Click "Create calendar"
+
+2. **Get the Calendar ID**:
+   - Open the calendar settings
+   - Go to "Integrate calendar" section
+   - Copy the "Calendar ID" (format: `c_...@group.calendar.google.com`)
+
+3. **Get the Share Link** (optional):
+   - In calendar settings, go to "Access permissions"
+   - Click "Get shareable link" or copy the URL from the calendar view
+
+4. **Update `config.js`**:
+   - Add the new year's calendar ID to the `calendarIds` object:
+   ```javascript
+   calendarIds: {
+     2026: 'c_...@group.calendar.google.com',
+     2027: 'c_NEW_CALENDAR_ID@group.calendar.google.com',  // Add here
+   },
+   ```
+
+5. **Share the calendar**:
+   - Share with the same users who have access to other years
+   - Grant "Make changes to events" permission
+   - Users can add it via the share link
+
+6. **Initial setup** (automatic):
+   - When someone first switches to the new year using the year selector dropdown, the app will:
+     - Create the `__PERSONNEL_CONFIG__` event automatically
+     - Initialize with default personnel/projects/roles
+   - You can then customize it via the UI (Manage Personnel, Projects, Roles)
+
+**Important Notes**:
+- Each year has its own calendar and its own `__PERSONNEL_CONFIG__` event
+- Personnel, projects, and roles are **per-year** (can differ between years)
+- The year selector dropdown will automatically show all years defined in `calendarIds`
+- If you select a year that doesn't have a calendar ID configured, you'll see an error message: "Calendar for year XXXX is not configured. Please add the calendar ID to config.js in the calendarIds object."
 
 ## License
 

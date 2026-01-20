@@ -517,8 +517,9 @@ async function loadEvents() {
   showStatus('Loading events...', 'loading');
   
   try {
-    const timeMin = new Date(new Date().getFullYear(), 0, 1).toISOString();
-    const timeMax = new Date(new Date().getFullYear() + 1, 11, 31).toISOString();
+    const year = CONFIG.year;
+    const timeMin = new Date(year, 0, 1).toISOString();
+    const timeMax = new Date(year, 11, 31, 23, 59, 59).toISOString();
     
     // Use gapi.client directly for better error handling
     const response = await gapiClient.calendar.events.list({
@@ -685,6 +686,7 @@ function initializeUI() {
   const calendarEl = document.getElementById('calendar');
   calendar = new FullCalendar.Calendar(calendarEl, {
     initialView: 'dayGridMonth',
+    initialDate: `${CONFIG.year}-01-01`,
     firstDay: 1, // Start week on Monday
     weekNumbers: true, // Display week numbers
     weekNumberCalculation: 'ISO', // ISO week numbering (Monday as first day)
@@ -695,6 +697,10 @@ function initializeUI() {
     selectable: true,
     selectMirror: true,
     dayMaxEvents: true,
+    validRange: {
+      start: `${CONFIG.year}-01-01`,
+      end: `${CONFIG.year}-12-31`
+    },
     headerToolbar: {
       left: 'prev,next today',
       center: 'title',
@@ -709,10 +715,44 @@ function initializeUI() {
   
   calendar.render();
   
+  // Initialize year selector
+  const yearSelect = document.getElementById('yearSelect');
+  if (yearSelect) {
+    // Populate available years from calendarIds
+    yearSelect.innerHTML = '';
+    Object.keys(CONFIG.calendarIds)
+      .sort((a, b) => parseInt(a) - parseInt(b))
+      .forEach(year => {
+        const option = document.createElement('option');
+        option.value = year;
+        option.textContent = year;
+        if (parseInt(year) === CONFIG.year) {
+          option.selected = true;
+        }
+        yearSelect.appendChild(option);
+      });
+    
+    yearSelect.addEventListener('change', handleYearChange);
+  }
+  
   // Event listeners
   document.getElementById('personFilter').addEventListener('change', updateCalendar);
   document.getElementById('projectFilter').addEventListener('change', updateCalendar);
   document.getElementById('refreshBtn').addEventListener('click', loadEvents);
+  
+  // Initialize header Today button (only visible in overview mode)
+  const headerTodayBtn = document.getElementById('headerTodayBtn');
+  if (headerTodayBtn) {
+    headerTodayBtn.addEventListener('click', () => {
+      const compactYearView = document.getElementById('compactYearView');
+      if (compactYearView && compactYearView.style.display !== 'none') {
+        const todayCell = compactYearView.querySelector('.day-cell.today');
+        if (todayCell) {
+          todayCell.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        }
+      }
+    });
+  }
   
   // Overview toggle button
   let overviewActive = false;
@@ -724,11 +764,19 @@ function initializeUI() {
       btn.textContent = 'Scheduling';
       btn.classList.add('btn-primary');
       btn.classList.remove('btn-secondary');
+      // Show Today button in header
+      if (headerTodayBtn) {
+        headerTodayBtn.style.display = 'inline-block';
+      }
     } else {
       hideCompactYearView();
       btn.textContent = 'Overview';
       btn.classList.remove('btn-primary');
       btn.classList.add('btn-secondary');
+      // Hide Today button in header
+      if (headerTodayBtn) {
+        headerTodayBtn.style.display = 'none';
+      }
     }
   });
   
@@ -876,6 +924,57 @@ function initializeUI() {
       rolesModal.style.display = 'none';
     }
   });
+}
+
+// Handle year change
+async function handleYearChange(event) {
+  const newYear = parseInt(event.target.value);
+  if (newYear === CONFIG.year) return;
+  
+  // Check if calendar ID exists for this year
+  if (!CONFIG.calendarIds[newYear]) {
+    showStatus(`Calendar for year ${newYear} is not configured. Please add the calendar ID to config.js in the calendarIds object.`, 'error');
+    // Reset dropdown to current year
+    event.target.value = CONFIG.year;
+    setTimeout(() => hideStatus(), 5000);
+    return;
+  }
+  
+  CONFIG.year = newYear;
+  
+  // Update calendar validRange and initial date
+  if (calendar) {
+    calendar.setOption('validRange', {
+      start: `${newYear}-01-01`,
+      end: `${newYear}-12-31`
+    });
+    calendar.setOption('initialDate', `${newYear}-01-01`);
+    calendar.gotoDate(`${newYear}-01-01`);
+  }
+  
+  // Reload events for new year
+  try {
+    await loadEvents();
+    updateCalendar();
+    
+    // Reload config from calendar (personnel, projects, roles)
+    await loadConfigFromCalendar();
+    updateFilters();
+    updatePersonnelLegend();
+    
+    if (document.getElementById('overviewToggleBtn')?.textContent === 'Scheduling') {
+      renderCompactYearView();
+    }
+    
+    showStatus(`Switched to year ${newYear}`, 'success');
+    setTimeout(() => hideStatus(), 2000);
+  } catch (error) {
+    console.error('Error switching year:', error);
+    showStatus(`Error switching to year ${newYear}: ${error.message}`, 'error');
+    // Reset dropdown to previous year
+    event.target.value = CONFIG.year;
+    setTimeout(() => hideStatus(), 5000);
+  }
 }
 
 // Update calendar display with filtered events
@@ -1171,6 +1270,13 @@ async function handleEventCreate() {
   const startDate = new Date(parseInt(startDateParts[0]), parseInt(startDateParts[1]) - 1, parseInt(startDateParts[2]));
   const endDate = new Date(parseInt(endDateParts[0]), parseInt(endDateParts[1]) - 1, parseInt(endDateParts[2]));
   
+  // Validate dates are in configured year
+  const year = CONFIG.year;
+  if (startDate.getFullYear() !== year || endDate.getFullYear() !== year) {
+    showStatus(`Dates must be in ${year}`, 'error');
+    return;
+  }
+  
   // End date should be exclusive (day after last day) for Google Calendar
   const endDateExclusive = new Date(endDate);
   endDateExclusive.setDate(endDateExclusive.getDate() + 1);
@@ -1247,6 +1353,16 @@ async function createEvent(person, project, role, start, end) {
 async function handleEventDrop(dropInfo) {
   const event = dropInfo.event;
   const gcalEvent = event.extendedProps.gcalEvent;
+  const newStart = event.start;
+  const newEnd = event.end || event.start;
+  
+  // Validate year
+  const year = CONFIG.year;
+  if (newStart.getFullYear() !== year || newEnd.getFullYear() !== year) {
+    showStatus(`Events must stay within ${year}`, 'error');
+    updateCalendar(); // Refresh to revert the change
+    return;
+  }
   
   try {
     await updateEvent(gcalEvent.id, dropInfo.event.start, dropInfo.event.end);
@@ -1263,6 +1379,16 @@ async function handleEventDrop(dropInfo) {
 async function handleEventResize(resizeInfo) {
   const event = resizeInfo.event;
   const gcalEvent = event.extendedProps.gcalEvent;
+  const newStart = event.start;
+  const newEnd = event.end || event.start;
+  
+  // Validate year
+  const year = CONFIG.year;
+  if (newStart.getFullYear() !== year || newEnd.getFullYear() !== year) {
+    showStatus(`Events must stay within ${year}`, 'error');
+    updateCalendar(); // Refresh to revert the change
+    return;
+  }
   
   try {
     await updateEvent(gcalEvent.id, resizeInfo.event.start, resizeInfo.event.end);
@@ -1830,6 +1956,7 @@ function refreshOverviewIfVisible() {
 function showCompactYearView() {
   const calendarEl = document.getElementById('calendar');
   const compactViewEl = document.getElementById('compactYearView');
+  const headerTodayBtn = document.getElementById('headerTodayBtn');
   
   if (calendarEl) {
     calendarEl.style.display = 'none';
@@ -1839,11 +1966,16 @@ function showCompactYearView() {
     compactViewEl.style.visibility = 'visible';
     renderCompactYearView();
   }
+  // Show Today button in header
+  if (headerTodayBtn) {
+    headerTodayBtn.style.display = 'inline-block';
+  }
 }
 
 function hideCompactYearView() {
   const calendarEl = document.getElementById('calendar');
   const compactViewEl = document.getElementById('compactYearView');
+  const headerTodayBtn = document.getElementById('headerTodayBtn');
   
   if (compactViewEl) {
     compactViewEl.style.display = 'none';
@@ -1858,6 +1990,10 @@ function hideCompactYearView() {
       calendar.render();
     }
   }
+  // Hide Today button in header
+  if (headerTodayBtn) {
+    headerTodayBtn.style.display = 'none';
+  }
 }
 
 // Calculate ISO week number
@@ -1871,8 +2007,7 @@ function getISOWeekNumber(date) {
 
 function renderCompactYearView() {
   const container = document.getElementById('compactYearView');
-  const currentYear = calendar ? calendar.getDate().getFullYear() : new Date().getFullYear();
-  const nextYear = currentYear + 1;
+  const year = CONFIG.year;
   
   // Get filtered events
   const personFilter = document.getElementById('personFilter').value;
@@ -1997,15 +2132,15 @@ function renderCompactYearView() {
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   
-  // Generate all days for current year and next year
+  // Generate all days for configured year
   const allDays = [];
-  const years = [currentYear, nextYear];
-  years.forEach(year => {
+  const years = [year];
+  years.forEach(yearNum => {
     for (let month = 0; month < 12; month++) {
-      const lastDay = new Date(year, month + 1, 0);
+      const lastDay = new Date(yearNum, month + 1, 0);
       const daysInMonth = lastDay.getDate();
       for (let day = 1; day <= daysInMonth; day++) {
-        const date = new Date(year, month, day);
+        const date = new Date(yearNum, month, day);
         // Use local date formatting to avoid timezone issues
         const dateKey = formatLocalDate(date);
         const dayOfWeek = date.getDay();
@@ -2018,7 +2153,7 @@ function renderCompactYearView() {
           dateKey,
           day,
           month,
-          year,
+          year: yearNum,
           dayName,
           isWeekend,
           weekNumber,
@@ -2030,10 +2165,6 @@ function renderCompactYearView() {
   
   // Build proper table structure like CSV
   let html = `<div class="project-overview-container">
-    <div class="project-overview-header">
-      <h2>${currentYear} - ${nextYear}</h2>
-      <button id="scrollToTodayBtn" class="btn btn-secondary" style="margin-left: 10px;">Today</button>
-    </div>
     <div class="overview-table-wrapper">
       <table class="overview-table">
       <thead>
@@ -2257,16 +2388,7 @@ function renderCompactYearView() {
   
   container.innerHTML = html;
   
-  // Add scroll to today button handler
-  const scrollToTodayBtn = container.querySelector('#scrollToTodayBtn');
-  if (scrollToTodayBtn) {
-    scrollToTodayBtn.addEventListener('click', () => {
-      const todayCell = container.querySelector('.day-cell.today');
-      if (todayCell) {
-        todayCell.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-      }
-    });
-  }
+  // Today button is now in header, no need to add handler here
   
   // Auto-scroll to today on initial load
   setTimeout(() => {
