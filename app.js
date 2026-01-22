@@ -123,7 +123,7 @@ async function loadConfigFromCalendar() {
         CONFIG.projects = configData.projects.map((project, index) => {
           if (typeof project === 'string') {
             return { name: project, color: defaultColors[index % defaultColors.length] };
-          }
+        }
           return { name: project.name || project, color: project.color || defaultColors[index % defaultColors.length] };
       });
     } else {
@@ -143,9 +143,9 @@ async function loadConfigFromCalendar() {
     CONFIG.personnel = defaultData.personnel;
     CONFIG.projects = defaultData.projects;
     CONFIG.roles = defaultData.roles;
+    }
   }
-}
-
+  
 // Save config to calendar
 async function saveConfigToCalendar() {
   if (!isSignedIn || !gapiClient) {
@@ -538,6 +538,10 @@ async function loadEvents() {
     // Update calendar display
     updateCalendar();
     
+    // Show success and auto-hide
+    showStatus('Events loaded successfully', 'success');
+    setTimeout(() => hideStatus(), 2000);
+    
   } catch (error) {
     console.error('Error loading events:', error);
     // Check if token expired
@@ -745,7 +749,7 @@ function initializeUI() {
   if (headerTodayBtn) {
     headerTodayBtn.addEventListener('click', () => {
       const compactYearView = document.getElementById('compactYearView');
-      if (compactYearView && compactYearView.style.display !== 'none') {
+      if (compactYearView && compactYearView.classList.contains('visible')) {
         const todayCell = compactYearView.querySelector('.day-cell.today');
         if (todayCell) {
           todayCell.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
@@ -1663,7 +1667,7 @@ function addPerson() {
   
   // Re-render compact year view if it's currently visible
   const compactYearView = document.getElementById('compactYearView');
-  if (compactYearView && compactYearView.style.display !== 'none') {
+  if (compactYearView && compactYearView.classList.contains('visible')) {
     renderCompactYearView();
   }
   
@@ -1684,7 +1688,7 @@ function removePerson(index) {
     
     // Re-render compact year view if it's currently visible
     const compactYearView = document.getElementById('compactYearView');
-    if (compactYearView && compactYearView.style.display !== 'none') {
+    if (compactYearView && compactYearView.classList.contains('visible')) {
       renderCompactYearView();
     }
     
@@ -1908,7 +1912,7 @@ function addRole() {
   
   // Re-render compact year view if it's currently visible
   const compactYearView = document.getElementById('compactYearView');
-  if (compactYearView && compactYearView.style.display !== 'none') {
+  if (compactYearView && compactYearView.classList.contains('visible')) {
     renderCompactYearView();
   }
   
@@ -1929,7 +1933,7 @@ function removeRole(index) {
     
     // Re-render compact year view if it's currently visible
     const compactYearView = document.getElementById('compactYearView');
-    if (compactYearView && compactYearView.style.display !== 'none') {
+    if (compactYearView && compactYearView.classList.contains('visible')) {
       renderCompactYearView();
     }
     
@@ -1959,12 +1963,14 @@ function showCompactYearView() {
   const headerTodayBtn = document.getElementById('headerTodayBtn');
   
   if (calendarEl) {
-    calendarEl.style.display = 'none';
+    calendarEl.classList.add('hidden');
   }
   if (compactViewEl) {
-    compactViewEl.style.display = 'block';
-    compactViewEl.style.visibility = 'visible';
-    renderCompactYearView();
+    compactViewEl.classList.add('visible');
+    // Use requestAnimationFrame to ensure CSS has applied before rendering
+    requestAnimationFrame(() => {
+      renderCompactYearView();
+    });
   }
   // Show Today button in header
   if (headerTodayBtn) {
@@ -1978,16 +1984,17 @@ function hideCompactYearView() {
   const headerTodayBtn = document.getElementById('headerTodayBtn');
   
   if (compactViewEl) {
-    compactViewEl.style.display = 'none';
-    compactViewEl.style.visibility = 'hidden';
+    compactViewEl.classList.remove('visible');
     compactViewEl.innerHTML = ''; // Clear content to prevent any rendering issues
   }
   if (calendarEl) {
-    calendarEl.style.display = 'block';
-    calendarEl.style.visibility = 'visible';
-    // Force calendar to refresh/redraw
+    calendarEl.classList.remove('hidden');
+    // Force calendar to recalculate size after becoming visible
     if (calendar) {
-      calendar.render();
+      // Use requestAnimationFrame to ensure DOM has updated
+      requestAnimationFrame(() => {
+        calendar.updateSize();
+      });
     }
   }
   // Hide Today button in header
