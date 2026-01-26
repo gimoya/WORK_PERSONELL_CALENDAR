@@ -95,40 +95,24 @@ async function loadConfigFromCalendar() {
     if (configEvent?.extendedProperties?.shared?.personnelConfig) {
       const configData = JSON.parse(configEvent.extendedProperties.shared.personnelConfig);
       
-      // Roles are now just strings (no colors) - migrate from old format if needed
       if (configData.roles && Array.isArray(configData.roles)) {
-        CONFIG.roles = configData.roles.map((role) => {
-          // Convert old format (objects with colors) to new format (strings)
-          return typeof role === 'string' ? role : (role.name || role);
-      });
-    } else {
-        // Use defaults if no roles
+        CONFIG.roles = configData.roles;
+      } else {
         const defaultData = getDefaultConfigData();
         CONFIG.roles = defaultData.roles;
       }
       
-      // Migrate personnel from old format (objects with colors) to new format (strings)
-      // Handle both old "people" and new "personnel" keys for backward compatibility
-      const personnelData = configData.personnel || configData.people;
-      if (personnelData && Array.isArray(personnelData)) {
-        CONFIG.personnel = personnelData.map(person => {
-          return typeof person === 'string' ? person : (person.name || person);
-        });
+      if (configData.personnel && Array.isArray(configData.personnel)) {
+        CONFIG.personnel = configData.personnel;
       } else {
         CONFIG.personnel = [];
       }
       
       if (configData.projects && Array.isArray(configData.projects)) {
-      const defaultColors = ['#4285f4', '#ea4335', '#fbbc04', '#34a853', '#9c27b0', '#ff9800', '#00bcd4', '#795548', '#607d8b', '#e91e63'];
-        CONFIG.projects = configData.projects.map((project, index) => {
-          if (typeof project === 'string') {
-            return { name: project, color: defaultColors[index % defaultColors.length] };
-        }
-          return { name: project.name || project, color: project.color || defaultColors[index % defaultColors.length] };
-      });
-    } else {
+        CONFIG.projects = configData.projects;
+      } else {
         CONFIG.projects = [];
-    }
+      }
   } else {
       // No config data, use defaults
       const defaultData = getDefaultConfigData();
@@ -574,13 +558,13 @@ function parseEvent(event) {
     };
   }
   
-  // Fallback to old format "Person - Project" (backward compatibility)
+  // Fallback to "Person - Project" format (role optional)
   const match = summary.match(/^(.+?)\s*-\s*(.+)$/);
   if (match) {
     return {
       person: match[1].trim(),
       project: match[2].trim(),
-      role: '' // No role in old format
+      role: ''
     };
   }
   
@@ -589,7 +573,7 @@ function parseEvent(event) {
 
 // Get project color
 function getProjectColor(projectName) {
-  const projectConfig = CONFIG.projects.find(p => (typeof p === 'string' ? p : p.name) === projectName);
+  const projectConfig = CONFIG.projects.find(p => p.name === projectName);
   return projectConfig ? (projectConfig.color || '#4285f4') : '#4285f4';
 }
 
@@ -603,26 +587,9 @@ function hexToRgba(hex, alpha) {
 
 // Check if person, project, or role exists in CONFIG
 function isValidEvent(person, project, role) {
-  // If person is empty, consider it valid (might be old format event)
-  // If person has a value, it must exist in CONFIG
-  const personExists = !person || person.trim() === '' || CONFIG.personnel.some(p => {
-    const personName = typeof p === 'string' ? p : p.name;
-    return personName === person;
-  });
-  
-  // If project is empty, consider it valid (might be old format event)
-  // If project has a value, it must exist in CONFIG
-  const projectExists = !project || project.trim() === '' || CONFIG.projects.some(p => {
-    const projectName = typeof p === 'string' ? p : p.name;
-    return projectName === project;
-  });
-  
-  // If role is empty, consider it valid (might be old format event)
-  // If role has a value, it must exist in CONFIG
-  const roleExists = !role || role.trim() === '' || CONFIG.roles.some(r => {
-    const roleName = typeof r === 'string' ? r : r.name;
-    return roleName === role;
-  });
+  const personExists = !person || person.trim() === '' || CONFIG.personnel.includes(person);
+  const projectExists = !project || project.trim() === '' || CONFIG.projects.some(p => p.name === project);
+  const roleExists = !role || role.trim() === '' || CONFIG.roles.includes(role);
   
   return personExists && projectExists && roleExists;
 }
@@ -670,9 +637,8 @@ function initializeUI() {
   const personFilter = document.getElementById('personFilter');
   CONFIG.personnel.forEach(person => {
     const option = document.createElement('option');
-    const personName = typeof person === 'string' ? person : person.name;
-    option.value = personName;
-    option.textContent = personName;
+    option.value = person;
+    option.textContent = person;
     personFilter.appendChild(option);
   });
   
@@ -680,9 +646,8 @@ function initializeUI() {
   const projectFilter = document.getElementById('projectFilter');
   CONFIG.projects.forEach(project => {
     const option = document.createElement('option');
-    const projectName = typeof project === 'string' ? project : project.name;
-    option.value = projectName;
-    option.textContent = projectName;
+    option.value = project.name;
+    option.textContent = project.name;
     projectFilter.appendChild(option);
   });
   
@@ -1043,9 +1008,8 @@ function handleDateSelect(selectInfo) {
   if (CONFIG.personnel && CONFIG.personnel.length > 0) {
     CONFIG.personnel.forEach(person => {
       const option = document.createElement('option');
-      const personName = typeof person === 'string' ? person : person.name;
-      option.value = personName;
-      option.textContent = personName;
+      option.value = person;
+      option.textContent = person;
       personSelect.appendChild(option);
     });
   }
@@ -1054,9 +1018,8 @@ function handleDateSelect(selectInfo) {
   if (CONFIG.projects && CONFIG.projects.length > 0) {
     CONFIG.projects.forEach(project => {
       const option = document.createElement('option');
-      const projectName = typeof project === 'string' ? project : project.name;
-      option.value = projectName;
-      option.textContent = projectName;
+      option.value = project.name;
+      option.textContent = project.name;
       projectSelect.appendChild(option);
     });
   }
@@ -1067,11 +1030,10 @@ function handleDateSelect(selectInfo) {
     roleSelect.innerHTML = '<option value="">Select a role...</option>';
     
       CONFIG.roles.forEach(role => {
-        const roleName = typeof role === 'string' ? role : role.name;
-        if (roleName && roleName.trim()) {
+        if (role && role.trim()) {
           const option = document.createElement('option');
-          option.value = roleName;
-          option.textContent = roleName;
+          option.value = role;
+          option.textContent = role;
           roleSelect.appendChild(option);
         }
       });
@@ -1153,9 +1115,8 @@ function openEventModal() {
   if (CONFIG.personnel && CONFIG.personnel.length > 0) {
     CONFIG.personnel.forEach(person => {
       const option = document.createElement('option');
-      const personName = typeof person === 'string' ? person : person.name;
-      option.value = personName;
-      option.textContent = personName;
+      option.value = person;
+      option.textContent = person;
       personSelect.appendChild(option);
     });
   }
@@ -1164,9 +1125,8 @@ function openEventModal() {
   if (CONFIG.projects && CONFIG.projects.length > 0) {
     CONFIG.projects.forEach(project => {
       const option = document.createElement('option');
-      const projectName = typeof project === 'string' ? project : project.name;
-      option.value = projectName;
-      option.textContent = projectName;
+      option.value = project.name;
+      option.textContent = project.name;
       projectSelect.appendChild(option);
     });
   }
@@ -1177,11 +1137,10 @@ function openEventModal() {
       roleSelect.innerHTML = '<option value="">Select a role...</option>';
       
       CONFIG.roles.forEach(role => {
-        const roleName = typeof role === 'string' ? role : role.name;
-        if (roleName && roleName.trim()) {
+        if (role && role.trim()) {
           const option = document.createElement('option');
-          option.value = roleName;
-          option.textContent = roleName;
+          option.value = role;
+          option.textContent = role;
         roleSelect.appendChild(option);
       }
     });
@@ -1507,11 +1466,10 @@ async function handleEventClick(clickInfo) {
   personSelect.innerHTML = '<option value="">Select personnel...</option>';
   if (CONFIG.personnel && CONFIG.personnel.length > 0) {
     CONFIG.personnel.forEach(p => {
-      const personName = typeof p === 'string' ? p : p.name;
       const option = document.createElement('option');
-      option.value = personName;
-      option.textContent = personName;
-      if (personName === person) {
+      option.value = p;
+      option.textContent = p;
+      if (p === person) {
         option.selected = true;
       }
       personSelect.appendChild(option);
@@ -1522,11 +1480,10 @@ async function handleEventClick(clickInfo) {
   projectSelect.innerHTML = '<option value="">Select a project...</option>';
   if (CONFIG.projects && CONFIG.projects.length > 0) {
     CONFIG.projects.forEach(proj => {
-      const projectName = typeof proj === 'string' ? proj : proj.name;
       const option = document.createElement('option');
-      option.value = projectName;
-      option.textContent = projectName;
-      if (projectName === project) {
+      option.value = proj.name;
+      option.textContent = proj.name;
+      if (proj.name === project) {
         option.selected = true;
       }
       projectSelect.appendChild(option);
@@ -1537,12 +1494,11 @@ async function handleEventClick(clickInfo) {
   roleSelect.innerHTML = '<option value="">Select a role...</option>';
   if (CONFIG.roles && CONFIG.roles.length > 0) {
     CONFIG.roles.forEach(r => {
-      const roleName = typeof r === 'string' ? r : r.name;
-      if (roleName && roleName.trim()) {
+      if (r && r.trim()) {
         const option = document.createElement('option');
-        option.value = roleName;
-        option.textContent = roleName;
-        if (roleName === role) {
+        option.value = r;
+        option.textContent = r;
+        if (r === role) {
           option.selected = true;
         }
         roleSelect.appendChild(option);
@@ -1630,11 +1586,10 @@ function updatePeopleList() {
   }
   
   CONFIG.personnel.forEach((person, index) => {
-    const personName = typeof person === 'string' ? person : person.name;
     const item = document.createElement('div');
     item.className = 'item-list-item';
     item.innerHTML = `
-      <span class="item-name">${personName}</span>
+      <span class="item-name">${person}</span>
       <div class="item-actions">
         <button class="btn btn-small btn-secondary" onclick="removePerson(${index})">Remove</button>
       </div>
@@ -1654,7 +1609,7 @@ function addPerson() {
   }
   
   // Check if person already exists
-  const exists = CONFIG.personnel.some(p => (typeof p === 'string' ? p : p.name) === name);
+  const exists = CONFIG.personnel.includes(name);
   if (exists) {
     showStatus('Personnel already exists', 'error');
     return;
@@ -1679,8 +1634,7 @@ function addPerson() {
 // Remove person
 function removePerson(index) {
   const person = CONFIG.personnel[index];
-  const personName = typeof person === 'string' ? person : person.name;
-  if (confirm(`Remove "${personName}"?`)) {
+  if (confirm(`Remove "${person}"?`)) {
     CONFIG.personnel.splice(index, 1);
     saveConfig();
     updatePeopleList();
@@ -1714,8 +1668,8 @@ function updateProjectsList() {
   }
   
   CONFIG.projects.forEach((project, index) => {
-    const projectName = typeof project === 'string' ? project : project.name;
-    const projectColor = typeof project === 'string' ? '#4285f4' : (project.color || '#4285f4');
+    const projectName = project.name;
+    const projectColor = project.color || '#4285f4';
     const item = document.createElement('div');
     item.className = 'item-list-item';
     item.innerHTML = `
@@ -1735,11 +1689,7 @@ function updateProjectsList() {
     const colorPreview = item.querySelector('.role-color-preview');
     colorPicker.addEventListener('change', (e) => {
       const newColor = e.target.value;
-      if (typeof CONFIG.projects[index] === 'string') {
-        CONFIG.projects[index] = { name: CONFIG.projects[index], color: newColor };
-      } else {
-        CONFIG.projects[index].color = newColor;
-      }
+      CONFIG.projects[index].color = newColor;
       // Update preview immediately
       colorPreview.style.backgroundColor = newColor;
       saveConfig();
@@ -1770,7 +1720,7 @@ function addProject() {
   }
   
   // Check if project already exists
-  const exists = CONFIG.projects.some(p => (typeof p === 'string' ? p : p.name) === name);
+  const exists = CONFIG.projects.some(p => p.name === name);
   if (exists) {
     showStatus('Project already exists', 'error');
     return;
@@ -1790,8 +1740,7 @@ function addProject() {
 // Remove project
 function removeProject(index) {
   const project = CONFIG.projects[index];
-  const projectName = typeof project === 'string' ? project : project.name;
-  if (confirm(`Remove "${projectName}"?`)) {
+  if (confirm(`Remove "${project.name}"?`)) {
     CONFIG.projects.splice(index, 1);
     saveConfig();
     updateProjectsList();
@@ -1811,8 +1760,8 @@ function updatePersonnelLegend() {
   if (!legendContainer) return;
   
   const legendItems = CONFIG.projects.map(project => {
-    const projectName = typeof project === 'string' ? project : project.name;
-    const projectColor = typeof project === 'string' ? '#4285f4' : (project.color || '#4285f4');
+    const projectName = project.name;
+    const projectColor = project.color || '#4285f4';
     return `<div class="personnel-legend-item">
       <div class="personnel-legend-color" style="background-color: ${projectColor};"></div>
       <span class="personnel-legend-name">${projectName}</span>
@@ -1828,11 +1777,10 @@ function updateFilters() {
   const currentPersonValue = personFilter.value;
   personFilter.innerHTML = '<option value="">All Personnel</option>';
   CONFIG.personnel.forEach(person => {
-    const personName = typeof person === 'string' ? person : person.name;
     const option = document.createElement('option');
-    option.value = personName;
-    option.textContent = personName;
-    if (personName === currentPersonValue) {
+    option.value = person;
+    option.textContent = person;
+    if (person === currentPersonValue) {
       option.selected = true;
     }
     personFilter.appendChild(option);
@@ -1844,10 +1792,9 @@ function updateFilters() {
   projectFilter.innerHTML = '<option value="">All Projects</option>';
   CONFIG.projects.forEach(project => {
     const option = document.createElement('option');
-    const projectName = typeof project === 'string' ? project : project.name;
-    option.value = projectName;
-    option.textContent = projectName;
-    if (projectName === currentProjectValue) {
+    option.value = project.name;
+    option.textContent = project.name;
+    if (project.name === currentProjectValue) {
       option.selected = true;
     }
     projectFilter.appendChild(option);
@@ -1874,11 +1821,10 @@ function updateRolesList() {
   }
   
   CONFIG.roles.forEach((role, index) => {
-    const roleName = typeof role === 'string' ? role : role.name;
     const item = document.createElement('div');
     item.className = 'item-list-item';
     item.innerHTML = `
-      <span class="item-name">${roleName}</span>
+      <span class="item-name">${role}</span>
       <div class="item-actions">
         <button class="btn btn-small btn-secondary" onclick="removeRole(${index})">Remove</button>
       </div>
@@ -1898,7 +1844,7 @@ function addRole() {
   }
   
   // Check if role already exists
-  const exists = CONFIG.roles.some(r => (typeof r === 'string' ? r : r.name) === name);
+  const exists = CONFIG.roles.includes(name);
   if (exists) {
     showStatus('Role already exists', 'error');
     return;
@@ -1924,8 +1870,7 @@ function addRole() {
 // Remove role
 function removeRole(index) {
   const role = CONFIG.roles[index];
-  const roleName = typeof role === 'string' ? role : role.name;
-  if (confirm(`Remove "${roleName}"?`)) {
+  if (confirm(`Remove "${role}"?`)) {
     CONFIG.roles.splice(index, 1);
     saveConfig();
     updateRolesList();
@@ -2031,31 +1976,50 @@ function renderCompactYearView() {
   }
   
   // Group events by project, then by person+role combination
-  // Only include events with valid person, project, and role
+  // Include ALL events - valid ones grouped normally, invalid ones in a special section
   const eventsByProjectPersonRole = {};
+  const invalidEvents = []; // Track invalid events separately
+  
   filteredEvents.forEach(event => {
-    const project = event.extendedProps.project || '';
-    const person = event.extendedProps.person || '';
-    const role = event.extendedProps.role || '';
-    
-    // Skip events without valid person, project, or role
-    if (!project || !person || !role || project.trim() === '' || person.trim() === '' || role.trim() === '' || project === 'Unassigned') {
-      return;
+    try {
+      const project = event.extendedProps.project || '';
+      const person = event.extendedProps.person || '';
+      const role = event.extendedProps.role || '';
+      
+      // Check if event is valid (has person, project, role and they exist in CONFIG)
+      const projectExists = CONFIG.projects.some(p => p.name === project);
+      const personExists = CONFIG.personnel.includes(person);
+      const roleExists = CONFIG.roles.includes(role);
+      
+      const isValid = project && person && role && 
+                      project.trim() !== '' && person.trim() !== '' && role.trim() !== '' &&
+                      projectExists && personExists && roleExists;
+      
+      if (!isValid) {
+        // Store invalid events separately
+        invalidEvents.push(event);
+        return;
+      }
+      
+      // Process valid events normally
+      const personRoleKey = `${person}|||${role}`;
+      
+      if (!eventsByProjectPersonRole[project]) {
+        eventsByProjectPersonRole[project] = {};
+      }
+      if (!eventsByProjectPersonRole[project][personRoleKey]) {
+        eventsByProjectPersonRole[project][personRoleKey] = {
+          person: person,
+          role: role,
+          events: []
+        };
+      }
+      eventsByProjectPersonRole[project][personRoleKey].events.push(event);
+    } catch (error) {
+      console.error('Error processing event:', error, event);
+      // Add to invalid events if processing fails
+      invalidEvents.push(event);
     }
-    
-    const personRoleKey = `${person}|||${role}`;
-    
-    if (!eventsByProjectPersonRole[project]) {
-      eventsByProjectPersonRole[project] = {};
-    }
-    if (!eventsByProjectPersonRole[project][personRoleKey]) {
-      eventsByProjectPersonRole[project][personRoleKey] = {
-        person: person,
-        role: role,
-        events: []
-      };
-    }
-    eventsByProjectPersonRole[project][personRoleKey].events.push(event);
   });
   
   // Create a map of all dates for each person+role in each project
@@ -2070,26 +2034,38 @@ function renderCompactYearView() {
       const dateSet = new Set();
       
       events.forEach(event => {
-        const start = new Date(event.start);
-        const end = new Date(event.end);
-        const current = new Date(start);
-        
-        // End date is exclusive in Google Calendar, so iterate while current < end (not <=)
-        while (current < end) {
-          // Use local date formatting to avoid timezone issues
-          const dateKey = formatLocalDate(current);
-          dateSet.add(dateKey);
+        try {
+          const start = new Date(event.start);
+          const end = new Date(event.end);
           
-          // Track personnel assignments per date for conflict detection
-          if (!personnelCountByDate[dateKey]) {
-            personnelCountByDate[dateKey] = {};
+          // Validate dates
+          if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+            console.warn('Skipping event with invalid dates:', event);
+            return;
           }
-          if (!personnelCountByDate[dateKey][person]) {
-            personnelCountByDate[dateKey][person] = 0;
-          }
-          personnelCountByDate[dateKey][person]++;
           
-          current.setDate(current.getDate() + 1);
+          const current = new Date(start);
+          
+          // End date is exclusive in Google Calendar, so iterate while current < end (not <=)
+          while (current < end) {
+            // Use local date formatting to avoid timezone issues
+            const dateKey = formatLocalDate(current);
+            dateSet.add(dateKey);
+            
+            // Track personnel assignments per date for conflict detection
+            if (!personnelCountByDate[dateKey]) {
+              personnelCountByDate[dateKey] = {};
+            }
+            if (!personnelCountByDate[dateKey][person]) {
+              personnelCountByDate[dateKey][person] = 0;
+            }
+            personnelCountByDate[dateKey][person]++;
+            
+            current.setDate(current.getDate() + 1);
+          }
+        } catch (error) {
+          console.error('Error processing event dates:', error, event);
+          // Continue with next event
         }
       });
       
@@ -2125,6 +2101,68 @@ function renderCompactYearView() {
       projectsWithAssignments.add(project);
     }
   });
+  
+  // Process invalid events and add them to personRoleDatesByProject
+  if (invalidEvents.length > 0) {
+    // Group invalid events by their original summary for display
+    const invalidBySummary = {};
+    invalidEvents.forEach(event => {
+      const summary = event.extendedProps.gcalEvent?.summary || 'Untitled Event';
+      if (!invalidBySummary[summary]) {
+        invalidBySummary[summary] = [];
+      }
+      invalidBySummary[summary].push(event);
+    });
+    
+    // Add each invalid event group as a row
+    Object.keys(invalidBySummary).forEach(summary => {
+      const events = invalidBySummary[summary];
+      const specialProject = '⚠️ Unformatted Events';
+      
+      if (!personRoleDatesByProject[specialProject]) {
+        personRoleDatesByProject[specialProject] = {};
+      }
+      
+      events.forEach(event => {
+        // Use summary as the person-role key
+        const personRoleKey = `${summary}|||Unformatted`;
+        if (!personRoleDatesByProject[specialProject][personRoleKey]) {
+          personRoleDatesByProject[specialProject][personRoleKey] = {
+            person: summary,
+            role: 'Unformatted',
+            dates: []
+          };
+        }
+        
+        // Process dates for invalid events
+        try {
+          const start = new Date(event.start);
+          const end = new Date(event.end);
+          if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+            const current = new Date(start);
+            const dateSet = new Set();
+            while (current < end) {
+              const dateKey = formatLocalDate(current);
+              dateSet.add(dateKey);
+              current.setDate(current.getDate() + 1);
+            }
+            // Merge dates with existing ones
+            const existingDates = personRoleDatesByProject[specialProject][personRoleKey].dates;
+            const newDates = Array.from(dateSet);
+            personRoleDatesByProject[specialProject][personRoleKey].dates = 
+              [...new Set([...existingDates, ...newDates])].sort();
+          }
+        } catch (error) {
+          console.error('Error processing dates for invalid event:', error);
+        }
+      });
+    });
+    
+    // Add to projects with assignments
+    if (Object.keys(personRoleDatesByProject['⚠️ Unformatted Events'] || {}).length > 0) {
+      projectsWithAssignments.add('⚠️ Unformatted Events');
+    }
+  }
   
   // Get projects to show: ONLY show projects with valid assignments (no empty rows from CONFIG)
   let projectsToShow = projectFilter 
@@ -2242,8 +2280,9 @@ function renderCompactYearView() {
   
   // Group data rows by project (one card per project)
   projectsToShow.forEach(project => {
-    const projectName = typeof project === 'string' ? project : project.name;
-    const projectColor = getProjectColor(projectName);
+    const projectName = project; // projectsToShow contains project names as strings
+    // For unformatted events, use gray color
+    const projectColor = projectName === '⚠️ Unformatted Events' ? '#9aa0a6' : getProjectColor(projectName);
     
     // Skip if project name is invalid
     if (!projectName || projectName.trim() === '' || projectName === '...') {
@@ -2258,8 +2297,8 @@ function renderCompactYearView() {
     });
     
     // Sort by CONFIG.roles order first, then by CONFIG.personnel order
-    const rolesOrder = CONFIG.roles.map(r => typeof r === 'string' ? r : r.name) || ['Project-Manager', 'Foreman', 'Shaper', 'Operator-Shaper'];
-    const peopleOrder = CONFIG.personnel.map(p => typeof p === 'string' ? p : p.name);
+    const rolesOrder = CONFIG.roles || ['Project-Manager', 'Foreman', 'Shaper', 'Operator-Shaper'];
+    const peopleOrder = CONFIG.personnel;
     
     personRoleKeys.sort((a, b) => {
       const comboA = personRoleCombos[a];
@@ -2319,16 +2358,16 @@ function renderCompactYearView() {
       
       // Project column (only in first row, spans all rows for this project, rotated 90°)
       if (isFirstRow) {
-        html += `<td class="project-col" rowspan="${rowSpan}" style="background-color: ${projectColor};">
+        html += `<td class="project-col" rowspan="${rowSpan}" style="background-color: ${projectColor};" title="${projectName}">
           <div class="project-name-rotated">${projectName}</div>
         </td>`;
       }
       
       // Role column with project color
-      html += `<td class="role-col" style="background-color: ${projectColor};">${role}</td>`;
+      html += `<td class="role-col" style="background-color: ${projectColor};" title="${role}">${role}</td>`;
       
       // Person column with project color (diagonal stripe pattern if this person has conflicts)
-      html += `<td class="${personColClass}" style="background-color: ${projectColor};">${person}</td>`;
+      html += `<td class="${personColClass}" style="background-color: ${projectColor};" title="${person}">${person}</td>`;
       
       // Day cells
       allDays.forEach((dayInfo, dayIndex) => {

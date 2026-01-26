@@ -694,6 +694,9 @@ body {
   max-width: 120px;
   text-align: left;
   padding: 3px 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   background-color: #f8f9fa;
   position: sticky;
   left: 100px;
@@ -712,6 +715,9 @@ body {
   max-width: 80px;
   text-align: left;
   padding: 3px 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   background-color: #f8f9fa;
   position: sticky;
   left: 220px;
@@ -729,6 +735,9 @@ body {
   font-size: 13px;
   color: #202124;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .overview-table td.label-cell .project-name-inline {
