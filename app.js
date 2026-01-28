@@ -1731,6 +1731,9 @@ function addProject() {
   updateProjectsList();
   updateFilters();
   updatePersonnelLegend();
+  if (document.getElementById('overviewToggleBtn')?.textContent === 'Scheduling') {
+    renderCompactYearView();
+  }
   nameInput.value = '';
   colorInput.value = '#4285f4';
   showStatus('Project added successfully', 'success');
@@ -2165,9 +2168,24 @@ function renderCompactYearView() {
   }
   
   // Get projects to show: ONLY show projects with valid assignments (no empty rows from CONFIG)
-  let projectsToShow = projectFilter 
+  // Order by earliest date that has at least one assignment (Unformatted Events last)
+  const earliestDateByProject = {};
+  projectsWithAssignments.forEach(project => {
+    const combos = personRoleDatesByProject[project] || {};
+    let earliest = null;
+    Object.keys(combos).forEach(key => {
+      const dates = combos[key]?.dates;
+      if (dates && dates.length > 0) {
+        const first = dates[0];
+        if (earliest === null || first < earliest) earliest = first;
+      }
+    });
+    // YYYY-MM-DD strings compare correctly; put Unformatted Events last
+    earliestDateByProject[project] = project === '⚠️ Unformatted Events' ? '9999-12-31' : (earliest || '9999-12-31');
+  });
+  let projectsToShow = projectFilter
     ? [projectFilter]
-    : Array.from(projectsWithAssignments).sort();
+    : Array.from(projectsWithAssignments).sort((a, b) => (earliestDateByProject[a] || '').localeCompare(earliestDateByProject[b] || ''));
   
   // Remove duplicates and filter invalid
   projectsToShow = [...new Set(projectsToShow)].filter(p => p && p.trim() !== '' && p !== '...');
