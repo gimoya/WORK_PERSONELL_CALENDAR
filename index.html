@@ -15,7 +15,7 @@
   </script>
   <link rel="stylesheet" href="styles.css">
   
-  <!-- FullCalendar CSS -->
+  <!-- FullCalendar CSS (https://fullcalendar.io/) -->
   <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.css" rel="stylesheet">
   
   <!-- Google Identity Services -->
@@ -54,25 +54,21 @@
         </div>
         
         <div class="control-group">
-          <label for="personFilter">Filter by Personnel</label>
-          <select id="personFilter">
-            <option value="">All Personnel</option>
-          </select>
-        </div>
-        
-        <div class="control-group">
-          <label for="projectFilter">Filter by Project</label>
-          <select id="projectFilter">
-            <option value="">All Projects</option>
-          </select>
-        </div>
-        
-        <div class="control-group">
           <button id="overviewToggleBtn" class="btn btn-secondary">Overview</button>
         </div>
         
-        <div class="control-group">
-          <button id="refreshBtn" class="btn">Refresh</button>
+        <div class="control-group filter-dropdown">
+          <button type="button" id="personFilterBtn" class="btn btn-secondary" aria-haspopup="true" aria-expanded="false">Personnel</button>
+          <div class="filter-dropdown-panel" id="personFilterPanel" role="menu" aria-label="Filter by personnel">
+            <div id="personFilterCheckboxes" class="filter-checkbox-list"></div>
+          </div>
+        </div>
+        
+        <div class="control-group filter-dropdown">
+          <button type="button" id="projectFilterBtn" class="btn btn-secondary" aria-haspopup="true" aria-expanded="false">Projects</button>
+          <div class="filter-dropdown-panel" id="projectFilterPanel" role="menu" aria-label="Filter by project">
+            <div id="projectFilterCheckboxes" class="filter-checkbox-list"></div>
+          </div>
         </div>
         
         <div class="control-group">
@@ -89,6 +85,10 @@
         
         <div class="control-group">
           <button id="newAssignmentBtn" class="btn btn-primary">New Assignment</button>
+        </div>
+        
+        <div class="control-group">
+          <button id="refreshBtn" class="btn">Refresh</button>
         </div>
         </div>
       </div>
@@ -170,7 +170,7 @@
     <div class="modal-content">
       <span class="modal-close" data-modal="projectsModal">&times;</span>
       <h2>Manage Projects</h2>
-      <divar  nee class="modal-form">
+      <div class="modal-form">
         <div class="form-group">
           <label for="newProjectName">Project Name:</label>
           <input type="text" id="newProjectName" class="form-control" placeholder="Enter project name">
@@ -265,7 +265,7 @@
   <!-- Configuration -->
   <script src="config.js"></script>
   
-  <!-- FullCalendar JS -->
+  <!-- FullCalendar JS (https://fullcalendar.io/) -->
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
   
   <!-- Main application -->

@@ -170,9 +170,8 @@ async function saveConfigToCalendar() {
   }
 }
 
-// Save config to calendar
+// Persist config (writes to calendar when signed in)
 async function saveConfig() {
-  // Only save to calendar - no localStorage
   if (isSignedIn && gapiClient) {
     try {
       await saveConfigToCalendar();
@@ -472,7 +471,7 @@ function handleSignOut() {
     signOutBtn.style.display = 'none';
   }
   if (calendar) {
-    calendar.destroy();
+    calendar.destroy(); // FullCalendar API
     calendar = null;
   }
   allEvents = [];
@@ -594,7 +593,7 @@ function isValidEvent(person, project, role) {
   return personExists && projectExists && roleExists;
 }
 
-// Convert Google Calendar event to FullCalendar event
+// Convert Google Calendar event to FullCalendar event shape (FullCalendar API)
 function toFullCalendarEvent(gcalEvent) {
   const { person, project, role } = parseEvent(gcalEvent);
   
@@ -623,6 +622,115 @@ function toFullCalendarEvent(gcalEvent) {
   };
 }
 
+// Multi-select filter helpers (checkboxes)
+function getSelectedFilters(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return [];
+  return Array.from(el.querySelectorAll('input[type="checkbox"]:checked'))
+    .filter(cb => !cb.classList.contains('filter-all-none'))
+    .map(cb => cb.value);
+}
+function getSelectedPersonFilters() {
+  return getSelectedFilters('personFilterCheckboxes');
+}
+function getSelectedProjectFilters() {
+  return getSelectedFilters('projectFilterCheckboxes');
+}
+
+function syncAllNoneCheckbox(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const allCb = container.querySelector('input.filter-all-none');
+  const itemCbs = container.querySelectorAll('input[type="checkbox"]:not(.filter-all-none)');
+  if (!allCb || itemCbs.length === 0) return;
+  const n = itemCbs.length;
+  const checked = Array.from(itemCbs).filter(cb => cb.checked).length;
+  allCb.checked = checked === n;
+  allCb.indeterminate = checked > 0 && checked < n;
+}
+
+function populateFilterCheckboxes() {
+  const personContainer = document.getElementById('personFilterCheckboxes');
+  const projectContainer = document.getElementById('projectFilterCheckboxes');
+  if (!personContainer || !projectContainer) return;
+  const selectedPersons = getSelectedPersonFilters();
+  const selectedProjects = getSelectedProjectFilters();
+
+  personContainer.innerHTML = '';
+  addAllNoneRow(personContainer, 'person', CONFIG.personnel.length, selectedPersons.length, function (checked) {
+    personContainer.querySelectorAll('input[type="checkbox"]:not(.filter-all-none)').forEach(cb => { cb.checked = checked; });
+    updateFilterButtonLabels();
+    updateCalendar();
+  });
+  [...CONFIG.personnel].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })).forEach(person => {
+    const label = document.createElement('label');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.value = person;
+    if (selectedPersons.length === 0 || selectedPersons.includes(person)) cb.checked = true;
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(person));
+    personContainer.appendChild(label);
+  });
+  syncAllNoneCheckbox('personFilterCheckboxes');
+
+  projectContainer.innerHTML = '';
+  addAllNoneRow(projectContainer, 'project', CONFIG.projects.length, selectedProjects.length, function (checked) {
+    projectContainer.querySelectorAll('input[type="checkbox"]:not(.filter-all-none)').forEach(cb => { cb.checked = checked; });
+    updateFilterButtonLabels();
+    updateCalendar();
+  });
+  [...CONFIG.projects].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })).forEach(project => {
+    const label = document.createElement('label');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.value = project.name;
+    if (selectedProjects.length === 0 || selectedProjects.includes(project.name)) cb.checked = true;
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(project.name));
+    projectContainer.appendChild(label);
+  });
+  syncAllNoneCheckbox('projectFilterCheckboxes');
+  updateFilterButtonLabels();
+}
+
+function addAllNoneRow(container, kind, total, selectedCount, onToggle) {
+  const label = document.createElement('label');
+  label.className = 'filter-all-none-row';
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.className = 'filter-all-none';
+  cb.checked = total > 0 && (selectedCount === 0 || selectedCount === total);
+  cb.indeterminate = selectedCount > 0 && selectedCount < total;
+  cb.title = 'Select all / none';
+  label.appendChild(cb);
+  label.appendChild(document.createTextNode('All / None'));
+  cb.addEventListener('change', () => {
+    onToggle(cb.checked);
+    syncAllNoneCheckbox(container.id);
+  });
+  container.appendChild(label);
+}
+
+function updateFilterButtonLabels(overrideSelectedPersons, overrideSelectedProjects) {
+  const personBtn = document.getElementById('personFilterBtn');
+  const projectBtn = document.getElementById('projectFilterBtn');
+  const persons = overrideSelectedPersons ?? getSelectedPersonFilters();
+  const projects = overrideSelectedProjects ?? getSelectedProjectFilters();
+  const personContainer = document.getElementById('personFilterCheckboxes');
+  const projectContainer = document.getElementById('projectFilterCheckboxes');
+  const totalPersonnel = personContainer ? personContainer.querySelectorAll('input[type="checkbox"]:not(.filter-all-none)').length : 0;
+  const totalProjects = projectContainer ? projectContainer.querySelectorAll('input[type="checkbox"]:not(.filter-all-none)').length : 0;
+  const personCount = totalPersonnel === 0 ? 0 : (persons.length > 0 ? persons.length : totalPersonnel);
+  const projectCount = totalProjects === 0 ? 0 : (projects.length > 0 ? projects.length : totalProjects);
+  if (personBtn) {
+    personBtn.textContent = totalPersonnel === 0 ? 'Personnel' : `Personnel (${personCount})`;
+  }
+  if (projectBtn) {
+    projectBtn.textContent = totalProjects === 0 ? 'Projects' : `Projects (${projectCount})`;
+  }
+}
+
 // Initialize UI components
 function initializeUI() {
   // Show sign-out button and hide sign-in button
@@ -633,39 +741,25 @@ function initializeUI() {
   }
   hideSignInButton();
   
-  // Populate person filter
-  const personFilter = document.getElementById('personFilter');
-  CONFIG.personnel.forEach(person => {
-    const option = document.createElement('option');
-    option.value = person;
-    option.textContent = person;
-    personFilter.appendChild(option);
-  });
+  // Populate person and project filter checkboxes
+  populateFilterCheckboxes();
   
-  // Populate project filter
-  const projectFilter = document.getElementById('projectFilter');
-  CONFIG.projects.forEach(project => {
-    const option = document.createElement('option');
-    option.value = project.name;
-    option.textContent = project.name;
-    projectFilter.appendChild(option);
-  });
-  
-  // Initialize FullCalendar
+  // Initialize FullCalendar (FullCalendar API: https://fullcalendar.io/)
   const calendarEl = document.getElementById('calendar');
   calendar = new FullCalendar.Calendar(calendarEl, {
+    // FullCalendar API options:
     initialView: 'dayGridMonth',
     initialDate: `${CONFIG.year}-01-01`,
     firstDay: 1, // Start week on Monday
-    weekNumbers: true, // Display week numbers
-    weekNumberCalculation: 'ISO', // ISO week numbering (Monday as first day)
+    weekNumbers: true,
+    weekNumberCalculation: 'ISO',
     editable: true,
-    eventStartEditable: true, // Allow dragging events to change start date
-    eventDurationEditable: true, // Allow resizing events to change duration
+    eventStartEditable: true,
+    eventDurationEditable: true,
     droppable: false,
     selectable: true,
     selectMirror: true,
-    dayMaxEvents: true,
+    dayMaxEvents: false, // Show all events expanded (no "+more" popover)
     validRange: {
       start: `${CONFIG.year}-01-01`,
       end: `${CONFIG.year}-12-31`
@@ -676,14 +770,15 @@ function initializeUI() {
       right: ''
     },
     events: [],
+    // FullCalendar API callbacks:
     select: handleDateSelect,
     eventDrop: handleEventDrop,
     eventResize: handleEventResize,
     eventClick: handleEventClick
   });
   
-  calendar.render();
-  
+  calendar.render(); // FullCalendar API
+
   // Initialize year selector
   const yearSelect = document.getElementById('yearSelect');
   if (yearSelect) {
@@ -704,9 +799,71 @@ function initializeUI() {
     yearSelect.addEventListener('change', handleYearChange);
   }
   
-  // Event listeners
-  document.getElementById('personFilter').addEventListener('change', updateCalendar);
-  document.getElementById('projectFilter').addEventListener('change', updateCalendar);
+  // Event listeners: filter dropdowns (portal to body so they appear above calendar)
+  const personFilterBtn = document.getElementById('personFilterBtn');
+  const projectFilterBtn = document.getElementById('projectFilterBtn');
+  const personFilterPanel = document.getElementById('personFilterPanel');
+  const projectFilterPanel = document.getElementById('projectFilterPanel');
+
+  function openFilterPanel(panel, button) {
+    if (!panel || !button) return;
+    const parent = button.closest('.filter-dropdown');
+    if (panel.parentNode === document.body) return;
+    const rect = button.getBoundingClientRect();
+    document.body.appendChild(panel);
+    panel.classList.add('filter-dropdown-panel-portal');
+    panel.style.display = 'block';
+    panel.style.top = (rect.bottom + 4) + 'px';
+    panel.style.left = rect.left + 'px';
+    parent?.classList.add('open');
+    button.setAttribute('aria-expanded', 'true');
+  }
+  function closeFilterPanel(panel, button) {
+    if (!panel || !button) return;
+    const parent = button.closest('.filter-dropdown');
+    if (panel.parentNode !== document.body) return;
+    parent?.appendChild(panel);
+    panel.classList.remove('filter-dropdown-panel-portal');
+    panel.style.display = '';
+    panel.style.top = '';
+    panel.style.left = '';
+    parent?.classList.remove('open');
+    button.setAttribute('aria-expanded', 'false');
+  }
+  function closeAllFilterPanels() {
+    [personFilterPanel, projectFilterPanel].forEach((panel, i) => {
+      const btn = i === 0 ? personFilterBtn : projectFilterBtn;
+      if (panel?.parentNode === document.body) closeFilterPanel(panel, btn);
+    });
+  }
+
+  if (personFilterBtn && personFilterPanel) {
+    personFilterBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const parent = personFilterBtn.closest('.filter-dropdown');
+      const isOpen = parent?.classList.contains('open');
+      closeFilterPanel(projectFilterPanel, projectFilterBtn);
+      if (isOpen) closeFilterPanel(personFilterPanel, personFilterBtn);
+      else openFilterPanel(personFilterPanel, personFilterBtn);
+    });
+    personFilterPanel.addEventListener('click', (e) => e.stopPropagation());
+  }
+  if (projectFilterBtn && projectFilterPanel) {
+    projectFilterBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const parent = projectFilterBtn.closest('.filter-dropdown');
+      const isOpen = parent?.classList.contains('open');
+      closeFilterPanel(personFilterPanel, personFilterBtn);
+      if (isOpen) closeFilterPanel(projectFilterPanel, projectFilterBtn);
+      else openFilterPanel(projectFilterPanel, projectFilterBtn);
+    });
+    projectFilterPanel.addEventListener('click', (e) => e.stopPropagation());
+  }
+  const personFilterEl = document.getElementById('personFilterCheckboxes');
+  const projectFilterEl = document.getElementById('projectFilterCheckboxes');
+  if (personFilterEl) personFilterEl.addEventListener('change', () => { syncAllNoneCheckbox('personFilterCheckboxes'); updateFilterButtonLabels(); updateCalendar(); });
+  if (projectFilterEl) projectFilterEl.addEventListener('change', () => { syncAllNoneCheckbox('projectFilterCheckboxes'); updateFilterButtonLabels(); updateCalendar(); });
+  document.addEventListener('click', closeAllFilterPanels);
   document.getElementById('refreshBtn').addEventListener('click', loadEvents);
   
   // Initialize header Today button (only visible in overview mode)
@@ -911,7 +1068,7 @@ async function handleYearChange(event) {
   
   CONFIG.year = newYear;
   
-  // Update calendar validRange and initial date
+  // Update calendar validRange and initial date (FullCalendar API)
   if (calendar) {
     calendar.setOption('validRange', {
       start: `${newYear}-01-01`,
@@ -946,24 +1103,23 @@ async function handleYearChange(event) {
   }
 }
 
-// Update calendar display with filtered events
-function updateCalendar() {
-  const personFilter = document.getElementById('personFilter').value;
-  const projectFilter = document.getElementById('projectFilter').value;
-  
+// Update calendar with filtered events
+function updateCalendar(overrideSelectedPersons, overrideSelectedProjects) {
+  const selectedPersons = overrideSelectedPersons ?? getSelectedPersonFilters();
+  const selectedProjects = overrideSelectedProjects ?? getSelectedProjectFilters();
+
   let filteredEvents = allEvents.map(toFullCalendarEvent);
-  
-  if (personFilter) {
-    filteredEvents = filteredEvents.filter(e => e.extendedProps.person === personFilter);
+
+  if (selectedPersons.length > 0) {
+    filteredEvents = filteredEvents.filter(e => selectedPersons.includes(e.extendedProps.person));
   }
-  
-  if (projectFilter) {
-    filteredEvents = filteredEvents.filter(e => e.extendedProps.project === projectFilter);
+  if (selectedProjects.length > 0) {
+    filteredEvents = filteredEvents.filter(e => selectedProjects.includes(e.extendedProps.project));
   }
-  
+
   calendar.removeAllEvents();
-  calendar.addEventSource(filteredEvents);
-  
+  calendar.addEventSource([...filteredEvents]);
+
   // Also update compact year view if it's active
   const overviewBtn = document.getElementById('overviewToggleBtn');
   if (overviewBtn && overviewBtn.textContent === 'Scheduling') {
@@ -1004,9 +1160,9 @@ function handleDateSelect(selectInfo) {
   projectSelect.innerHTML = '<option value="">Select a project...</option>';
   roleSelect.innerHTML = '<option value="">Select a role...</option>';
   
-  // Populate person dropdown
+  // Populate person dropdown (alpha)
   if (CONFIG.personnel && CONFIG.personnel.length > 0) {
-    CONFIG.personnel.forEach(person => {
+    [...CONFIG.personnel].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })).forEach(person => {
       const option = document.createElement('option');
       option.value = person;
       option.textContent = person;
@@ -1014,9 +1170,9 @@ function handleDateSelect(selectInfo) {
     });
   }
   
-  // Populate project dropdown
+  // Populate project dropdown (alpha)
   if (CONFIG.projects && CONFIG.projects.length > 0) {
-    CONFIG.projects.forEach(project => {
+    [...CONFIG.projects].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })).forEach(project => {
       const option = document.createElement('option');
       option.value = project.name;
       option.textContent = project.name;
@@ -1024,18 +1180,16 @@ function handleDateSelect(selectInfo) {
     });
   }
   
-  // Populate role dropdown
+  // Populate role dropdown (alpha)
   if (CONFIG.roles && CONFIG.roles.length > 0) {
   if (roleSelect) {
     roleSelect.innerHTML = '<option value="">Select a role...</option>';
     
-      CONFIG.roles.forEach(role => {
-        if (role && role.trim()) {
+      [...CONFIG.roles].filter(r => r && r.trim()).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })).forEach(role => {
           const option = document.createElement('option');
           option.value = role;
           option.textContent = role;
           roleSelect.appendChild(option);
-        }
       });
     }
   }
@@ -1065,16 +1219,14 @@ function handleDateSelect(selectInfo) {
       if (roleSelectCheck && roleSelectCheck.options.length <= 1) {
         // Repopulate if still empty
         roleSelectCheck.innerHTML = '<option value="">Select a role...</option>';
-        const rolesToAdd = CONFIG.roles && CONFIG.roles.length > 0 
-          ? CONFIG.roles 
-          : ['Project-Manager', 'Foreman', 'Shaper', 'Operator-Shaper'];
-    rolesToAdd.forEach(role => {
-          if (role && role.trim()) {
-        const option = document.createElement('option');
-        option.value = role;
-        option.textContent = role;
-            roleSelectCheck.appendChild(option);
-          }
+        const rolesToAdd = (CONFIG.roles && CONFIG.roles.length > 0 ? CONFIG.roles : ['Project-Manager', 'Foreman', 'Shaper', 'Operator-Shaper'])
+          .filter(r => r && r.trim())
+          .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+        rolesToAdd.forEach(role => {
+          const option = document.createElement('option');
+          option.value = role;
+          option.textContent = role;
+          roleSelectCheck.appendChild(option);
         });
       }
     }, 100);
@@ -1111,63 +1263,48 @@ function openEventModal() {
   projectSelect.innerHTML = '<option value="">Select a project...</option>';
   roleSelect.innerHTML = '<option value="">Select a role...</option>';
   
-  // Populate person dropdown
+  // Populate person dropdown (alpha)
   if (CONFIG.personnel && CONFIG.personnel.length > 0) {
-    CONFIG.personnel.forEach(person => {
+    [...CONFIG.personnel].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })).forEach(person => {
       const option = document.createElement('option');
       option.value = person;
       option.textContent = person;
       personSelect.appendChild(option);
     });
   }
-  
-  // Populate project dropdown
+  // Populate project dropdown (alpha)
   if (CONFIG.projects && CONFIG.projects.length > 0) {
-    CONFIG.projects.forEach(project => {
+    [...CONFIG.projects].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })).forEach(project => {
       const option = document.createElement('option');
       option.value = project.name;
       option.textContent = project.name;
       projectSelect.appendChild(option);
     });
   }
-  
-  // Populate role dropdown
-  if (CONFIG.roles && CONFIG.roles.length > 0) {
-    if (roleSelect) {
-      roleSelect.innerHTML = '<option value="">Select a role...</option>';
-      
-      CONFIG.roles.forEach(role => {
-        if (role && role.trim()) {
-          const option = document.createElement('option');
-          option.value = role;
-          option.textContent = role;
-        roleSelect.appendChild(option);
-      }
+  // Populate role dropdown (alpha)
+  if (CONFIG.roles && CONFIG.roles.length > 0 && roleSelect) {
+    roleSelect.innerHTML = '<option value="">Select a role...</option>';
+    [...CONFIG.roles].filter(r => r && r.trim()).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })).forEach(role => {
+      const option = document.createElement('option');
+      option.value = role;
+      option.textContent = role;
+      roleSelect.appendChild(option);
     });
-    }
   }
-  
-  // Show modal
   const eventModal = document.getElementById('eventModal');
   if (eventModal) {
     eventModal.style.display = 'block';
-    
-    // Double-check role dropdown after modal is shown
     setTimeout(() => {
       const roleSelectCheck = document.getElementById('eventRole');
       if (roleSelectCheck && roleSelectCheck.options.length <= 1) {
-        // Repopulate if still empty
         roleSelectCheck.innerHTML = '<option value="">Select a role...</option>';
-        const rolesToAdd = CONFIG.roles && CONFIG.roles.length > 0 
-          ? CONFIG.roles 
-          : ['Project-Manager', 'Foreman', 'Shaper', 'Operator-Shaper'];
+        const rolesToAdd = (CONFIG.roles && CONFIG.roles.length > 0 ? CONFIG.roles : ['Project-Manager', 'Foreman', 'Shaper', 'Operator-Shaper'])
+          .filter(r => r && r.trim()).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
         rolesToAdd.forEach(role => {
-          if (role && role.trim()) {
-            const option = document.createElement('option');
-            option.value = role;
-            option.textContent = role;
-            roleSelectCheck.appendChild(option);
-          }
+          const option = document.createElement('option');
+          option.value = role;
+          option.textContent = role;
+          roleSelectCheck.appendChild(option);
         });
       }
     }, 100);
@@ -1199,7 +1336,7 @@ function closeEventModal() {
   }
   
   if (calendar) {
-    calendar.unselect();
+    calendar.unselect(); // FullCalendar API
   }
 }
 
@@ -1329,7 +1466,11 @@ async function handleEventDrop(dropInfo) {
   
   try {
     await updateEvent(gcalEvent.id, dropInfo.event.start, dropInfo.event.end);
-    await loadEvents(); // Reload events to sync with Google Calendar
+    refreshOverviewIfVisible();
+    requestAnimationFrame(() => {
+      updateCalendar();
+      refreshOverviewIfVisible();
+    });
   } catch (error) {
     console.error('Error updating event:', error);
     showStatus('Error updating event: ' + error.message, 'error');
@@ -1462,47 +1603,37 @@ async function handleEventClick(clickInfo) {
     return;
   }
   
-  // Clear and populate person dropdown
+  // Clear and populate person dropdown (alpha)
   personSelect.innerHTML = '<option value="">Select personnel...</option>';
   if (CONFIG.personnel && CONFIG.personnel.length > 0) {
-    CONFIG.personnel.forEach(p => {
+    [...CONFIG.personnel].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })).forEach(p => {
       const option = document.createElement('option');
       option.value = p;
       option.textContent = p;
-      if (p === person) {
-        option.selected = true;
-      }
+      if (p === person) option.selected = true;
       personSelect.appendChild(option);
     });
   }
-  
-  // Clear and populate project dropdown
+  // Clear and populate project dropdown (alpha)
   projectSelect.innerHTML = '<option value="">Select a project...</option>';
   if (CONFIG.projects && CONFIG.projects.length > 0) {
-    CONFIG.projects.forEach(proj => {
+    [...CONFIG.projects].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })).forEach(proj => {
       const option = document.createElement('option');
       option.value = proj.name;
       option.textContent = proj.name;
-      if (proj.name === project) {
-        option.selected = true;
-      }
+      if (proj.name === project) option.selected = true;
       projectSelect.appendChild(option);
     });
   }
-  
-  // Clear and populate role dropdown
+  // Clear and populate role dropdown (alpha)
   roleSelect.innerHTML = '<option value="">Select a role...</option>';
   if (CONFIG.roles && CONFIG.roles.length > 0) {
-    CONFIG.roles.forEach(r => {
-      if (r && r.trim()) {
-        const option = document.createElement('option');
-        option.value = r;
-        option.textContent = r;
-        if (r === role) {
-          option.selected = true;
-        }
-        roleSelect.appendChild(option);
-      }
+    [...CONFIG.roles].filter(r => r && r.trim()).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })).forEach(r => {
+      const option = document.createElement('option');
+      option.value = r;
+      option.textContent = r;
+      if (r === role) option.selected = true;
+      roleSelect.appendChild(option);
     });
   }
   
@@ -1585,7 +1716,8 @@ function updatePeopleList() {
     return;
   }
   
-  CONFIG.personnel.forEach((person, index) => {
+  [...CONFIG.personnel].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })).forEach(person => {
+    const index = CONFIG.personnel.indexOf(person);
     const item = document.createElement('div');
     item.className = 'item-list-item';
     item.innerHTML = `
@@ -1619,36 +1751,63 @@ function addPerson() {
   saveConfig();
   updatePeopleList();
   updateFilters();
-  
-  // Re-render compact year view if it's currently visible
-  const compactYearView = document.getElementById('compactYearView');
-  if (compactYearView && compactYearView.classList.contains('visible')) {
-    renderCompactYearView();
-  }
-  
+  // Ensure new person is included in the filter (checkbox checked); defer so DOM is updated
+  requestAnimationFrame(() => {
+    const personCheckboxes = document.querySelectorAll('#personFilterCheckboxes input[type="checkbox"]');
+    personCheckboxes.forEach(cb => { if (cb.value === name) cb.checked = true; });
+    updateFilterButtonLabels();
+    updateCalendar();
+    if (document.getElementById('compactYearView')?.classList.contains('visible')) {
+      renderCompactYearView();
+    }
+  });
   nameInput.value = '';
   showStatus('Personnel added successfully', 'success');
   setTimeout(() => hideStatus(), 2000);
 }
 
-// Remove person
-function removePerson(index) {
-  const person = CONFIG.personnel[index];
-  if (confirm(`Remove "${person}"?`)) {
-    CONFIG.personnel.splice(index, 1);
-    saveConfig();
-    updatePeopleList();
-    updateFilters();
-    
-    // Re-render compact year view if it's currently visible
-    const compactYearView = document.getElementById('compactYearView');
-    if (compactYearView && compactYearView.classList.contains('visible')) {
-      renderCompactYearView();
+// Remove person (and all events assigned to this person)
+async function removePerson(index) {
+  const personName = CONFIG.personnel[index];
+  if (!confirm(`Remove "${personName}"? All events assigned to this person will be deleted from the calendar.`)) return;
+  const eventsToDelete = allEvents.filter(e => {
+    const { person } = parseEvent(e);
+    return person === personName;
+  });
+  if (eventsToDelete.length > 0) {
+    showStatus(`Deleting ${eventsToDelete.length} event(s)...`, 'loading');
+    try {
+      for (const e of eventsToDelete) {
+        await gapiClient.calendar.events.delete({
+          calendarId: CONFIG.calendarId,
+          eventId: e.id
+        });
+      }
+      const ids = new Set(eventsToDelete.map(e => e.id));
+      allEvents = allEvents.filter(e => !ids.has(e.id));
+      updateCalendar();
+      refreshOverviewIfVisible();
+    } catch (err) {
+      console.error('Error deleting events for person:', err);
+      if (err.status === 401) {
+        handleSignOut();
+        showSignInButton();
+      }
+      showStatus('Failed to delete some events. Person not removed.', 'error');
+      setTimeout(() => hideStatus(), 4000);
+      return;
     }
-    
-    showStatus('Personnel removed', 'success');
-    setTimeout(() => hideStatus(), 2000);
   }
+  CONFIG.personnel.splice(index, 1);
+  saveConfig();
+  updatePeopleList();
+  updateFilters();
+  const compactYearView = document.getElementById('compactYearView');
+  if (compactYearView && compactYearView.classList.contains('visible')) {
+    renderCompactYearView();
+  }
+  showStatus(eventsToDelete.length > 0 ? `Personnel and ${eventsToDelete.length} event(s) removed` : 'Personnel removed', 'success');
+  setTimeout(() => hideStatus(), 2000);
 }
 
 // Show projects management modal
@@ -1667,7 +1826,8 @@ function updateProjectsList() {
     return;
   }
   
-  CONFIG.projects.forEach((project, index) => {
+  [...CONFIG.projects].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })).forEach(project => {
+    const index = CONFIG.projects.indexOf(project);
     const projectName = project.name;
     const projectColor = project.color || '#4285f4';
     const item = document.createElement('div');
@@ -1683,8 +1843,6 @@ function updateProjectsList() {
       </div>
     `;
     projectsList.appendChild(item);
-    
-    // Add color change handler
     const colorPicker = item.querySelector('.role-color-picker');
     const colorPreview = item.querySelector('.role-color-preview');
     colorPicker.addEventListener('change', (e) => {
@@ -1731,30 +1889,65 @@ function addProject() {
   updateProjectsList();
   updateFilters();
   updatePersonnelLegend();
-  if (document.getElementById('overviewToggleBtn')?.textContent === 'Scheduling') {
-    renderCompactYearView();
-  }
+  // Ensure new project is included in the filter (checkbox checked); defer so DOM is updated
+  requestAnimationFrame(() => {
+    const projectCheckboxes = document.querySelectorAll('#projectFilterCheckboxes input[type="checkbox"]');
+    projectCheckboxes.forEach(cb => { if (cb.value === name) cb.checked = true; });
+    updateFilterButtonLabels();
+    updateCalendar();
+    if (document.getElementById('overviewToggleBtn')?.textContent === 'Scheduling') {
+      renderCompactYearView();
+    }
+  });
   nameInput.value = '';
   colorInput.value = '#4285f4';
   showStatus('Project added successfully', 'success');
   setTimeout(() => hideStatus(), 2000);
 }
 
-// Remove project
-function removeProject(index) {
+// Remove project (and all events assigned to this project)
+async function removeProject(index) {
   const project = CONFIG.projects[index];
-  if (confirm(`Remove "${project.name}"?`)) {
-    CONFIG.projects.splice(index, 1);
-    saveConfig();
-    updateProjectsList();
-    updateFilters();
-    updatePersonnelLegend();
-    if (document.getElementById('overviewToggleBtn')?.textContent === 'Scheduling') {
-      renderCompactYearView();
+  const projectName = project.name;
+  if (!confirm(`Remove "${projectName}"? All events for this project will be deleted from the calendar.`)) return;
+  const eventsToDelete = allEvents.filter(e => {
+    const { project: evProject } = parseEvent(e);
+    return evProject === projectName;
+  });
+  if (eventsToDelete.length > 0) {
+    showStatus(`Deleting ${eventsToDelete.length} event(s)...`, 'loading');
+    try {
+      for (const e of eventsToDelete) {
+        await gapiClient.calendar.events.delete({
+          calendarId: CONFIG.calendarId,
+          eventId: e.id
+        });
+      }
+      const ids = new Set(eventsToDelete.map(e => e.id));
+      allEvents = allEvents.filter(e => !ids.has(e.id));
+      updateCalendar();
+      refreshOverviewIfVisible();
+    } catch (err) {
+      console.error('Error deleting events for project:', err);
+      if (err.status === 401) {
+        handleSignOut();
+        showSignInButton();
+      }
+      showStatus('Failed to delete some events. Project not removed.', 'error');
+      setTimeout(() => hideStatus(), 4000);
+      return;
     }
-    showStatus('Project removed', 'success');
-    setTimeout(() => hideStatus(), 2000);
   }
+  CONFIG.projects.splice(index, 1);
+  saveConfig();
+  updateProjectsList();
+  updateFilters();
+  updatePersonnelLegend();
+  if (document.getElementById('overviewToggleBtn')?.textContent === 'Scheduling') {
+    renderCompactYearView();
+  }
+  showStatus(eventsToDelete.length > 0 ? `Project and ${eventsToDelete.length} event(s) removed` : 'Project removed', 'success');
+  setTimeout(() => hideStatus(), 2000);
 }
 
 // Update filter dropdowns
@@ -1775,35 +1968,7 @@ function updatePersonnelLegend() {
 }
 
 function updateFilters() {
-  // Update person filter
-  const personFilter = document.getElementById('personFilter');
-  const currentPersonValue = personFilter.value;
-  personFilter.innerHTML = '<option value="">All Personnel</option>';
-  CONFIG.personnel.forEach(person => {
-    const option = document.createElement('option');
-    option.value = person;
-    option.textContent = person;
-    if (person === currentPersonValue) {
-      option.selected = true;
-    }
-    personFilter.appendChild(option);
-  });
-  
-  // Update project filter
-  const projectFilter = document.getElementById('projectFilter');
-  const currentProjectValue = projectFilter.value;
-  projectFilter.innerHTML = '<option value="">All Projects</option>';
-  CONFIG.projects.forEach(project => {
-    const option = document.createElement('option');
-    option.value = project.name;
-    option.textContent = project.name;
-    if (project.name === currentProjectValue) {
-      option.selected = true;
-    }
-    projectFilter.appendChild(option);
-  });
-  
-  // Update calendar display
+  populateFilterCheckboxes();
   updateCalendar();
 }
 
@@ -1823,7 +1988,8 @@ function updateRolesList() {
     return;
   }
   
-  CONFIG.roles.forEach((role, index) => {
+  [...CONFIG.roles].filter(r => r && r.trim()).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })).forEach(role => {
+    const index = CONFIG.roles.indexOf(role);
     const item = document.createElement('div');
     item.className = 'item-list-item';
     item.innerHTML = `
@@ -1937,9 +2103,8 @@ function hideCompactYearView() {
   }
   if (calendarEl) {
     calendarEl.classList.remove('hidden');
-    // Force calendar to recalculate size after becoming visible
+    // Force calendar to recalculate size after becoming visible (FullCalendar API)
     if (calendar) {
-      // Use requestAnimationFrame to ensure DOM has updated
       requestAnimationFrame(() => {
         calendar.updateSize();
       });
@@ -1963,19 +2128,18 @@ function getISOWeekNumber(date) {
 function renderCompactYearView() {
   const container = document.getElementById('compactYearView');
   const year = CONFIG.year;
-  
-  // Get filtered events
-  const personFilter = document.getElementById('personFilter').value;
-  const projectFilter = document.getElementById('projectFilter').value;
-  
+
+  // Get filtered events (toFullCalendarEvent produces FullCalendar event shape; we reuse for overview)
+  const selectedPersons = getSelectedPersonFilters();
+  const selectedProjects = getSelectedProjectFilters();
+
   let filteredEvents = allEvents.map(toFullCalendarEvent);
-  
-  if (personFilter) {
-    filteredEvents = filteredEvents.filter(e => e.extendedProps.person === personFilter);
+
+  if (selectedPersons.length > 0) {
+    filteredEvents = filteredEvents.filter(e => selectedPersons.includes(e.extendedProps.person));
   }
-  
-  if (projectFilter) {
-    filteredEvents = filteredEvents.filter(e => e.extendedProps.project === projectFilter);
+  if (selectedProjects.length > 0) {
+    filteredEvents = filteredEvents.filter(e => selectedProjects.includes(e.extendedProps.project));
   }
   
   // Group events by project, then by person+role combination
@@ -2183,11 +2347,10 @@ function renderCompactYearView() {
     // YYYY-MM-DD strings compare correctly; put Unformatted Events last
     earliestDateByProject[project] = project === '⚠️ Unformatted Events' ? '9999-12-31' : (earliest || '9999-12-31');
   });
-  let projectsToShow = projectFilter
-    ? [projectFilter]
+  let projectsToShow = selectedProjects.length > 0
+    ? selectedProjects.filter(p => projectsWithAssignments.has(p)).sort((a, b) => (earliestDateByProject[a] || '').localeCompare(earliestDateByProject[b] || ''))
     : Array.from(projectsWithAssignments).sort((a, b) => (earliestDateByProject[a] || '').localeCompare(earliestDateByProject[b] || ''));
-  
-  // Remove duplicates and filter invalid
+
   projectsToShow = [...new Set(projectsToShow)].filter(p => p && p.trim() !== '' && p !== '...');
   
   
@@ -2451,9 +2614,7 @@ function renderCompactYearView() {
   </div>`;
   
   container.innerHTML = html;
-  
-  // Today button is now in header, no need to add handler here
-  
+
   // Auto-scroll to today on initial load
   setTimeout(() => {
     const todayCell = container.querySelector('.day-cell.today');
